@@ -1,0 +1,10 @@
+{
+  "display_name": "骰子插件",
+  "loading_order": 10,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "author": "Shion",
+  "version": "1.0.0",
+  "auto_update": false
+}
