@@ -23,6 +23,10 @@ export function buildSettingsCardHtmlTemplateEvent(
             <i class="fa-solid fa-gear"></i>
             <span>主设置</span>
           </button>
+          <button id="${ids.tabSkillId}" type="button" class="st-roll-tab">
+            <i class="fa-solid fa-bolt"></i>
+            <span>技能</span>
+          </button>
           <button id="${ids.tabRuleId}" type="button" class="st-roll-tab">
             <i class="fa-solid fa-scroll"></i>
             <span>规则编辑</span>
@@ -210,6 +214,103 @@ export function buildSettingsCardHtmlTemplateEvent(
           <div class="st-roll-tip st-roll-search-item" data-st-roll-search="event protocol prompt summary context">
             发送前会自动注入规则与摘要，帮助 AI 在多轮中保持事件状态一致。
           </div>
+        </div>
+
+        <div id="${ids.panelSkillId}" class="st-roll-panel" hidden>
+          <div class="st-roll-divider">
+            <i class="fa-solid fa-bolt"></i>
+            <span>技能系统</span>
+            <div class="st-roll-divider-line"></div>
+          </div>
+
+          <label class="st-roll-item st-roll-search-item" data-st-roll-search="skill system enable toggle">
+            <div class="st-roll-item-main">
+              <div class="st-roll-item-title">启用技能系统</div>
+              <div class="st-roll-item-desc">关闭后：技能不参与检定、不注入规则、卡片不显示技能修正。</div>
+            </div>
+            <div class="st-roll-inline">
+              <input id="${ids.skillEnabledId}" type="checkbox" />
+            </div>
+          </label>
+
+          <div class="st-roll-item st-roll-search-item" data-st-roll-search="skill full screen modal editor">
+            <div class="st-roll-item-main">
+              <div class="st-roll-item-title">全屏技能编辑器</div>
+              <div class="st-roll-item-desc">点击打开全屏弹窗进行预设和技能编辑，避免设置页内容被遮挡。</div>
+            </div>
+            <div class="st-roll-actions">
+              <button id="${ids.skillEditorOpenId}" type="button" class="st-roll-btn">打开编辑器</button>
+            </div>
+          </div>
+
+          <dialog id="${ids.skillModalId}" class="st-roll-skill-modal">
+            <div class="st-roll-skill-modal-backdrop" data-skill-modal-role="backdrop"></div>
+            <div class="st-roll-skill-modal-panel">
+              <div class="st-roll-skill-modal-head">
+                <div class="st-roll-skill-modal-title">
+                  <i class="fa-solid fa-bolt"></i>
+                  <span>技能预设编辑器</span>
+                </div>
+                <button id="${ids.skillModalCloseId}" type="button" class="st-roll-btn secondary st-roll-skill-modal-close">关闭</button>
+              </div>
+
+              <div class="st-roll-skill-modal-body">
+                <div id="${ids.skillPresetLayoutId}" class="st-roll-skill-layout">
+                  <aside id="${ids.skillPresetSidebarId}" class="st-roll-skill-presets">
+                    <div class="st-roll-skill-presets-head">
+                      <span class="st-roll-field-label">技能预设</span>
+                      <div class="st-roll-actions">
+                        <button id="${ids.skillPresetCreateId}" type="button" class="st-roll-btn">新建预设</button>
+                        <button id="${ids.skillPresetDeleteId}" type="button" class="st-roll-btn secondary">删除预设</button>
+                      </div>
+                    </div>
+                    <div id="${ids.skillPresetMetaId}" class="st-roll-skill-preset-meta"></div>
+                    <div id="${ids.skillPresetListId}" class="st-roll-skill-preset-list"></div>
+                  </aside>
+
+                  <div id="${ids.skillEditorWrapId}" class="st-roll-textarea-wrap">
+                    <div class="st-roll-row st-roll-skill-rename-row">
+                      <span class="st-roll-field-label">预设名称</span>
+                      <input id="${ids.skillPresetNameId}" class="st-roll-input st-roll-skill-preset-name-input" type="text" placeholder="输入预设名称" />
+                      <button id="${ids.skillPresetRenameId}" type="button" class="st-roll-btn">保存名称</button>
+                    </div>
+
+                    <div class="st-roll-tip">技能加值必须是整数（可正可负）；技能名按去首尾空格并忽略大小写判重。</div>
+                    <div id="${ids.skillDirtyHintId}" class="st-roll-skill-dirty" hidden>技能改动未保存，点击“保存技能表”后生效。</div>
+                    <div id="${ids.skillErrorsId}" class="st-roll-skill-errors" hidden></div>
+
+                    <div class="st-roll-skill-head">
+                      <span class="st-roll-field-label">技能表（当前预设）</span>
+                      <div class="st-roll-actions">
+                        <button id="${ids.skillAddId}" type="button" class="st-roll-btn">新增技能</button>
+                        <button id="${ids.skillSaveId}" type="button" class="st-roll-btn">保存技能表</button>
+                        <button id="${ids.skillResetId}" type="button" class="st-roll-btn secondary">重置为空</button>
+                        <button id="${ids.skillImportToggleId}" type="button" class="st-roll-btn secondary">导入 JSON</button>
+                        <button id="${ids.skillExportId}" type="button" class="st-roll-btn secondary">导出 JSON</button>
+                      </div>
+                    </div>
+
+                    <div class="st-roll-skill-cols">
+                      <span>技能名</span>
+                      <span>加值（整数）</span>
+                      <span>操作</span>
+                    </div>
+                    <div id="${ids.skillRowsId}" class="st-roll-skill-rows"></div>
+
+                    <div id="${ids.skillImportAreaId}" class="st-roll-skill-import" hidden>
+                      <div class="st-roll-row" style="margin-bottom:8px;">
+                        <span class="st-roll-field-label">粘贴 JSON 对象后应用导入</span>
+                        <div class="st-roll-actions">
+                          <button id="${ids.skillImportApplyId}" type="button" class="st-roll-btn">应用导入</button>
+                        </div>
+                      </div>
+                      <textarea id="${ids.skillTextId}" class="st-roll-textarea" rows="7" placeholder='例如：{"察觉":10,"说服":8}'></textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </dialog>
         </div>
 
         <div id="${ids.panelRuleId}" class="st-roll-panel" hidden>

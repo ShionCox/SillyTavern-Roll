@@ -45,6 +45,14 @@ function formatModifier(mod: number): string {
   return mod > 0 ? `+${mod}` : `${mod}`;
 }
 
+function formatEventModifierBreakdownEvent(
+  baseModifier: number,
+  skillModifier: number,
+  finalModifier: number
+): string {
+  return `${formatModifier(baseModifier)} + skill ${formatModifier(skillModifier)} = ${formatModifier(finalModifier)}`;
+}
+
 function getDiceSvg(
   value: number,
   sides: number,
@@ -367,6 +375,7 @@ function registerBaseMacrosAndCommandsEvent(): void {
 type CompareOperatorEvent = ">=" | ">" | "<=" | "<";
 type EventApplyScopeSettingEvent = "protagonist_only" | "all";
 type EventScopeTagEvent = "protagonist" | "all" | "character";
+type EventTargetTypeEvent = "self" | "scene" | "supporting" | "object" | "other";
 type EventRollModeEvent = "auto" | "manual";
 type EventRollSourceEvent = "manual_roll" | "ai_auto_roll" | "timeout_auto_fail";
 type SummaryDetailModeEvent = "minimal" | "balanced" | "detailed";
@@ -399,7 +408,31 @@ interface DicePluginSettingsEvent {
   showOutcomePreviewInListCard: boolean;
   enableTimeLimit: boolean;
   minTimeLimitSeconds: number;
+  enableSkillSystem: boolean;
+  skillTableText: string;
+  skillPresetStoreText: string;
   ruleText: string;
+}
+
+interface SkillEditorRowDraftEvent {
+  rowId: string;
+  skillName: string;
+  modifierText: string;
+}
+
+interface SkillPresetEvent {
+  id: string;
+  name: string;
+  locked: boolean;
+  skillTableText: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface SkillPresetStoreEvent {
+  version: 1;
+  activePresetId: string;
+  presets: SkillPresetEvent[];
 }
 
 interface DiceEventSpecEvent {
@@ -411,6 +444,9 @@ interface DiceEventSpecEvent {
   scope?: EventScopeTagEvent;
   rollMode?: EventRollModeEvent;
   skill: string;
+  targetType: EventTargetTypeEvent;
+  targetName?: string;
+  targetLabel: string;
   timeLimit?: string;
   offeredAt?: number;
   deadlineAt?: number | null;
@@ -429,6 +465,10 @@ interface EventRollRecordEvent {
   success: boolean | null;
   compareUsed: CompareOperatorEvent;
   dcUsed: number | null;
+  skillModifierApplied: number;
+  baseModifierUsed: number;
+  finalModifierUsed: number;
+  targetLabelUsed: string;
   rolledAt: number;
   source: EventRollSourceEvent;
   timeoutAt?: number | null;
@@ -454,6 +494,7 @@ interface RoundSummaryEventItemEvent {
   id: string;
   title: string;
   desc: string;
+  targetLabel: string;
   skill: string;
   checkDice: string;
   compare: CompareOperatorEvent;
@@ -463,6 +504,9 @@ interface RoundSummaryEventItemEvent {
   status: SummaryEventStatusEvent;
   resultSource: EventRollSourceEvent | null;
   total: number | null;
+  skillModifierApplied: number;
+  baseModifierUsed: number;
+  finalModifierUsed: number;
   success: boolean | null;
   outcomeKind: EventOutcomeKindEvent;
   outcomeText: string;
@@ -519,14 +563,40 @@ const SETTINGS_LIST_OUTCOME_PREVIEW_ID_Event = "st-roll-settings-Event-list-outc
 const SETTINGS_TIME_LIMIT_ENABLED_ID_Event = "st-roll-settings-Event-time-limit-enabled";
 const SETTINGS_TIME_LIMIT_MIN_ID_Event = "st-roll-settings-Event-time-limit-min-seconds";
 const SETTINGS_TIME_LIMIT_ROW_ID_Event = "st-roll-settings-Event-time-limit-row";
+const SETTINGS_SKILL_ENABLED_ID_Event = "st-roll-settings-Event-skill-enabled";
+const SETTINGS_SKILL_EDITOR_WRAP_ID_Event = "st-roll-settings-Event-skill-editor-wrap";
+const SETTINGS_SKILL_ROWS_ID_Event = "st-roll-settings-Event-skill-rows";
+const SETTINGS_SKILL_ADD_ID_Event = "st-roll-settings-Event-skill-add";
+const SETTINGS_SKILL_TEXT_ID_Event = "st-roll-settings-Event-skill-text";
+const SETTINGS_SKILL_IMPORT_TOGGLE_ID_Event = "st-roll-settings-Event-skill-import-toggle";
+const SETTINGS_SKILL_IMPORT_AREA_ID_Event = "st-roll-settings-Event-skill-import-area";
+const SETTINGS_SKILL_IMPORT_APPLY_ID_Event = "st-roll-settings-Event-skill-import-apply";
+const SETTINGS_SKILL_EXPORT_ID_Event = "st-roll-settings-Event-skill-export";
+const SETTINGS_SKILL_SAVE_ID_Event = "st-roll-settings-Event-skill-save";
+const SETTINGS_SKILL_RESET_ID_Event = "st-roll-settings-Event-skill-reset";
+const SETTINGS_SKILL_ERRORS_ID_Event = "st-roll-settings-Event-skill-errors";
+const SETTINGS_SKILL_DIRTY_HINT_ID_Event = "st-roll-settings-Event-skill-dirty-hint";
+const SETTINGS_SKILL_PRESET_LAYOUT_ID_Event = "st-roll-settings-Event-skill-preset-layout";
+const SETTINGS_SKILL_PRESET_SIDEBAR_ID_Event = "st-roll-settings-Event-skill-preset-sidebar";
+const SETTINGS_SKILL_PRESET_LIST_ID_Event = "st-roll-settings-Event-skill-preset-list";
+const SETTINGS_SKILL_PRESET_CREATE_ID_Event = "st-roll-settings-Event-skill-preset-create";
+const SETTINGS_SKILL_PRESET_DELETE_ID_Event = "st-roll-settings-Event-skill-preset-delete";
+const SETTINGS_SKILL_PRESET_NAME_ID_Event = "st-roll-settings-Event-skill-preset-name";
+const SETTINGS_SKILL_PRESET_RENAME_ID_Event = "st-roll-settings-Event-skill-preset-rename";
+const SETTINGS_SKILL_PRESET_META_ID_Event = "st-roll-settings-Event-skill-preset-meta";
+const SETTINGS_SKILL_EDITOR_OPEN_ID_Event = "st-roll-settings-Event-skill-editor-open";
+const SETTINGS_SKILL_MODAL_ID_Event = "st-roll-settings-Event-skill-modal";
+const SETTINGS_SKILL_MODAL_CLOSE_ID_Event = "st-roll-settings-Event-skill-modal-close";
 const SETTINGS_RULE_TEXT_ID_Event = "st-roll-settings-Event-rule-text";
 const SETTINGS_RULE_SAVE_ID_Event = "st-roll-settings-Event-rule-save";
 const SETTINGS_RULE_RESET_ID_Event = "st-roll-settings-Event-rule-reset";
 const SETTINGS_SEARCH_ID_Event = "st-roll-settings-Event-search";
 const SETTINGS_TAB_MAIN_ID_Event = "st-roll-settings-Event-tab-main";
+const SETTINGS_TAB_SKILL_ID_Event = "st-roll-settings-Event-tab-skill";
 const SETTINGS_TAB_RULE_ID_Event = "st-roll-settings-Event-tab-rule";
 const SETTINGS_TAB_ABOUT_ID_Event = "st-roll-settings-Event-tab-about";
 const SETTINGS_PANEL_MAIN_ID_Event = "st-roll-settings-Event-panel-main";
+const SETTINGS_PANEL_SKILL_ID_Event = "st-roll-settings-Event-panel-skill";
 const SETTINGS_PANEL_RULE_ID_Event = "st-roll-settings-Event-panel-rule";
 const SETTINGS_PANEL_ABOUT_ID_Event = "st-roll-settings-Event-panel-about";
 const manifestAny_Event = manifestJson as Record<string, any>;
@@ -561,38 +631,56 @@ const SUMMARY_HISTORY_ROUNDS_MIN_Event = 1;
 const SUMMARY_HISTORY_ROUNDS_MAX_Event = 10;
 const SUMMARY_HISTORY_MAX_STORED_Event = 20;
 const OUTCOME_TEXT_MAX_LEN_Event = 400;
+const SKILL_PRESET_STORE_VERSION_Event = 1 as const;
+const SKILL_PRESET_DEFAULT_ID_Event = "skill_preset_default_general_trpg";
+const SKILL_PRESET_DEFAULT_NAME_Event = "通用叙事TRPG（默认）";
+const SKILL_PRESET_MIGRATION_NAME_Event = "迁移技能预设";
+const SKILL_PRESET_NEW_NAME_BASE_Event = "新预设";
+const DEFAULT_SKILL_PRESET_TABLE_Event: Record<string, number> = {
+  察觉: 10,
+  说服: 8,
+  潜行: 6,
+  调查: 9,
+  交涉: 7,
+  意志: 8,
+  反应: 6,
+  体能: 7,
+  医疗: 5,
+  知识: 8,
+};
+const DEFAULT_SKILL_PRESET_TABLE_TEXT_Event = JSON.stringify(DEFAULT_SKILL_PRESET_TABLE_Event, null, 2);
 const ISO_8601_DURATION_REGEX_Event =
   /^P(?=\d|T\d)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/i;
 const DEFAULT_RULE_TEXT_Event = `你必须严格遵循以下骰子事件协议：
-1. 当需要触发掷骰事件时，只在回复末尾输出一个 \`\`\`rolljson 代码块。
-2. 禁止使用 \`\`\`json 或其他语言标签；必须是 \`\`\`rolljson。
-3. 顶层结构固定为：
+1. 需要触发掷骰事件时，只在回复末尾输出一个 \`\`\`rolljson 代码块（禁止 \`\`\`json）。
+2. 顶层固定结构：
 {"type":"dice_events","version":"1","events":[...]}
-4. events[i] 必填字段与类型：
+3. events[i] 必填字段：
 - id: string
 - title: string
-- checkDice: string（例如 "1d100"、"1d20+3"、"1d6!"）
+- checkDice: string（如 "1d100"、"1d20+3"、"1d6!"）
 - dc: number
-- skill: string
+- skill: string（用于匹配技能系统中的技能表 key）
 - desc: string
-5. events[i] 可选字段与类型：
-- compare: string，仅允许 >= > <= <，缺省按 >=
+4. events[i] 可选字段：
+- compare: string，仅允许 >= > <= <（默认 >=）
 - scope: string，仅允许 protagonist / character / all
-- rollMode: string，仅允许 auto / manual，缺省按 manual
-- timeLimit: string，必须是 ISO 8601 duration（例如 PT30S、PT5M）
-- outcomes: object，可包含 success / failure / explode 三个剧情走向文本
-6. outcomes 子字段说明：
-- outcomes.success: 判定成功时的剧情走向
-- outcomes.failure: 判定失败时的剧情走向（超时失败也归入 failure）
-- outcomes.explode: 触发爆骰时的特殊剧情走向（优先于 success/failure）
-7. 兼容字段：successOutcome / failureOutcome / explodeOutcome 也会被识别，但推荐使用 outcomes 对象。
-8. 重要：字段类型必须正确，尤其 checkDice 必须是字符串，不能是布尔值或数字。
-9. 正确示例（单事件）：
+- rollMode: string，仅允许 auto / manual（默认 manual）
+- timeLimit: string，ISO 8601 duration（例如 PT30S、PT5M）
+- target: object，{ type, name? }；type 仅允许 self / scene / supporting / object / other
+- outcomes: object，可包含 success / failure / explode 走向文本
+5. outcomes 说明：
+- outcomes.success: 判定成功走向
+- outcomes.failure: 判定失败走向（超时失败也归入 failure）
+- outcomes.explode: 爆骰走向（优先于 success/failure）
+6. 兼容字段 successOutcome / failureOutcome / explodeOutcome 也可识别，但推荐 outcomes 对象。
+7. 字段类型必须正确，尤其 checkDice 必须是字符串。
+8. 正确示例：
 \`\`\`rolljson
-{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d100!","dc":60,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
+{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d100!","dc":60,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","target":{"type":"supporting","name":"穗秋生"},"outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
 \`\`\`
-10. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
-11. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为；请据此保持剧情与状态一致。`;
+9. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
+10. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为，请据此保持剧情一致。`;
 const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   enabled: true,
   autoSendRuleToAI: true,
@@ -607,12 +695,24 @@ const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   showOutcomePreviewInListCard: true,
   enableTimeLimit: true,
   minTimeLimitSeconds: 10,
+  enableSkillSystem: true,
+  skillTableText: "{}",
+  skillPresetStoreText: "",
   ruleText: DEFAULT_RULE_TEXT_Event,
 };
 const LOCAL_METADATA_FALLBACK_Event: Record<string, any> = {};
 const LOCAL_SETTINGS_FALLBACK_Event: DicePluginSettingsEvent = {
   ...DEFAULT_SETTINGS_Event,
 };
+let SKILL_EDITOR_ROWS_DRAFT_Event: SkillEditorRowDraftEvent[] = [];
+let SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = "[]";
+let SKILL_EDITOR_LAST_SETTINGS_TEXT_Event = "";
+let SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event = "";
+let SKILL_EDITOR_ACTIVE_PRESET_ID_Event = "";
+let SKILL_EDITOR_DIRTY_Event = false;
+let SKILL_EDITOR_BEFORE_UNLOAD_BOUND_Event = false;
+let SKILL_EDITOR_MODAL_KEYDOWN_BOUND_Event = false;
+let SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = "";
 
 function getLiveContextEvent(): STContext | null {
   try {
@@ -742,6 +842,22 @@ function getSettingsEvent(): DicePluginSettingsEvent {
   const minSecondsRaw = Number(bucket.minTimeLimitSeconds);
   const minSeconds = Number.isFinite(minSecondsRaw) ? Math.floor(minSecondsRaw) : 10;
   bucket.minTimeLimitSeconds = Math.max(1, minSeconds);
+  bucket.enableSkillSystem = bucket.enableSkillSystem !== false;
+  bucket.skillTableText =
+    typeof bucket.skillTableText === "string" && bucket.skillTableText.trim().length > 0
+      ? bucket.skillTableText
+      : "{}";
+  bucket.skillPresetStoreText = normalizeSkillPresetStoreTextForSettingsEvent(
+    typeof (bucket as any).skillPresetStoreText === "string"
+      ? String((bucket as any).skillPresetStoreText)
+      : "",
+    bucket.skillTableText
+  );
+  const presetStore = parseSkillPresetStoreTextEvent(bucket.skillPresetStoreText);
+  if (presetStore) {
+    bucket.skillTableText = syncActivePresetToSkillTableTextEvent(presetStore, bucket.skillTableText);
+    bucket.skillPresetStoreText = JSON.stringify(presetStore, null, 2);
+  }
   bucket.ruleText =
     typeof bucket.ruleText === "string" && bucket.ruleText.trim().length > 0
       ? bucket.ruleText
@@ -806,9 +922,11 @@ function mountSettingsCardEvent(attempt = 0): void {
     githubUrl: SETTINGS_GITHUB_URL_Event,
     searchId: SETTINGS_SEARCH_ID_Event,
     tabMainId: SETTINGS_TAB_MAIN_ID_Event,
+    tabSkillId: SETTINGS_TAB_SKILL_ID_Event,
     tabRuleId: SETTINGS_TAB_RULE_ID_Event,
     tabAboutId: SETTINGS_TAB_ABOUT_ID_Event,
     panelMainId: SETTINGS_PANEL_MAIN_ID_Event,
+    panelSkillId: SETTINGS_PANEL_SKILL_ID_Event,
     panelRuleId: SETTINGS_PANEL_RULE_ID_Event,
     panelAboutId: SETTINGS_PANEL_ABOUT_ID_Event,
     enabledId: SETTINGS_ENABLED_ID_Event,
@@ -825,26 +943,69 @@ function mountSettingsCardEvent(attempt = 0): void {
     timeLimitEnabledId: SETTINGS_TIME_LIMIT_ENABLED_ID_Event,
     timeLimitMinId: SETTINGS_TIME_LIMIT_MIN_ID_Event,
     timeLimitRowId: SETTINGS_TIME_LIMIT_ROW_ID_Event,
+    skillEnabledId: SETTINGS_SKILL_ENABLED_ID_Event,
+    skillEditorWrapId: SETTINGS_SKILL_EDITOR_WRAP_ID_Event,
+    skillRowsId: SETTINGS_SKILL_ROWS_ID_Event,
+    skillAddId: SETTINGS_SKILL_ADD_ID_Event,
+    skillTextId: SETTINGS_SKILL_TEXT_ID_Event,
+    skillImportToggleId: SETTINGS_SKILL_IMPORT_TOGGLE_ID_Event,
+    skillImportAreaId: SETTINGS_SKILL_IMPORT_AREA_ID_Event,
+    skillImportApplyId: SETTINGS_SKILL_IMPORT_APPLY_ID_Event,
+    skillExportId: SETTINGS_SKILL_EXPORT_ID_Event,
+    skillSaveId: SETTINGS_SKILL_SAVE_ID_Event,
+    skillResetId: SETTINGS_SKILL_RESET_ID_Event,
+    skillErrorsId: SETTINGS_SKILL_ERRORS_ID_Event,
+    skillDirtyHintId: SETTINGS_SKILL_DIRTY_HINT_ID_Event,
+    skillPresetLayoutId: SETTINGS_SKILL_PRESET_LAYOUT_ID_Event,
+    skillPresetSidebarId: SETTINGS_SKILL_PRESET_SIDEBAR_ID_Event,
+    skillPresetListId: SETTINGS_SKILL_PRESET_LIST_ID_Event,
+    skillPresetCreateId: SETTINGS_SKILL_PRESET_CREATE_ID_Event,
+    skillPresetDeleteId: SETTINGS_SKILL_PRESET_DELETE_ID_Event,
+    skillPresetNameId: SETTINGS_SKILL_PRESET_NAME_ID_Event,
+    skillPresetRenameId: SETTINGS_SKILL_PRESET_RENAME_ID_Event,
+    skillPresetMetaId: SETTINGS_SKILL_PRESET_META_ID_Event,
+    skillEditorOpenId: SETTINGS_SKILL_EDITOR_OPEN_ID_Event,
+    skillModalId: SETTINGS_SKILL_MODAL_ID_Event,
+    skillModalCloseId: SETTINGS_SKILL_MODAL_CLOSE_ID_Event,
     ruleSaveId: SETTINGS_RULE_SAVE_ID_Event,
     ruleResetId: SETTINGS_RULE_RESET_ID_Event,
     ruleTextId: SETTINGS_RULE_TEXT_ID_Event,
   };
   root.innerHTML = buildSettingsCardHtmlTemplateEvent(templateIds);
 
+  const modalInPanel = root.querySelector(`#${SETTINGS_SKILL_MODAL_ID_Event}`) as HTMLElement | null;
+  if (modalInPanel) {
+    root.appendChild(modalInPanel);
+  }
+
   container.prepend(root);
   syncSettingsBadgeVersionEvent();
 
   const tabMain = document.getElementById(SETTINGS_TAB_MAIN_ID_Event) as HTMLButtonElement | null;
+  const tabSkill = document.getElementById(SETTINGS_TAB_SKILL_ID_Event) as HTMLButtonElement | null;
   const tabRule = document.getElementById(SETTINGS_TAB_RULE_ID_Event) as HTMLButtonElement | null;
   const tabAbout = document.getElementById(SETTINGS_TAB_ABOUT_ID_Event) as HTMLButtonElement | null;
   const panelMain = document.getElementById(SETTINGS_PANEL_MAIN_ID_Event) as HTMLElement | null;
+  const panelSkill = document.getElementById(SETTINGS_PANEL_SKILL_ID_Event) as HTMLElement | null;
   const panelRule = document.getElementById(SETTINGS_PANEL_RULE_ID_Event) as HTMLElement | null;
   const panelAbout = document.getElementById(SETTINGS_PANEL_ABOUT_ID_Event) as HTMLElement | null;
+  const skillModal = document.getElementById(
+    SETTINGS_SKILL_MODAL_ID_Event
+  ) as HTMLDialogElement | null;
+  const skillEditorOpenBtn = document.getElementById(
+    SETTINGS_SKILL_EDITOR_OPEN_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillModalCloseBtn = document.getElementById(
+    SETTINGS_SKILL_MODAL_CLOSE_ID_Event
+  ) as HTMLButtonElement | null;
   const searchInput = document.getElementById(
     SETTINGS_SEARCH_ID_Event
   ) as HTMLInputElement | null;
   const searchableMainItems = panelMain
     ? Array.from(panelMain.querySelectorAll<HTMLElement>(".st-roll-search-item"))
+    : [];
+  const searchableSkillItems = panelSkill
+    ? Array.from(panelSkill.querySelectorAll<HTMLElement>(".st-roll-search-item"))
     : [];
   const searchableRuleItems = panelRule
     ? Array.from(panelRule.querySelectorAll<HTMLElement>(".st-roll-search-item"))
@@ -852,21 +1013,72 @@ function mountSettingsCardEvent(attempt = 0): void {
   const searchableAboutItems = panelAbout
     ? Array.from(panelAbout.querySelectorAll<HTMLElement>(".st-roll-search-item"))
     : [];
-  const searchableItems = [...searchableMainItems, ...searchableRuleItems, ...searchableAboutItems];
+  const searchableItems = [
+    ...searchableMainItems,
+    ...searchableSkillItems,
+    ...searchableRuleItems,
+    ...searchableAboutItems,
+  ];
 
-  let activeTab: "main" | "rule" | "about" = "main";
+  let activeTab: "main" | "skill" | "rule" | "about" = "main";
+  const closeSkillEditorModalEvent = () => {
+    if (!skillModal) return;
+    if (skillModal.open) {
+      try {
+        skillModal.close();
+      } catch {
+        // noop
+      }
+    }
+    if (document.body.dataset.stRollSkillModalOpen === "1") {
+      document.body.style.overflow = document.body.dataset.stRollSkillModalOverflow || "";
+      delete document.body.dataset.stRollSkillModalOpen;
+      delete document.body.dataset.stRollSkillModalOverflow;
+    }
+  };
 
-  const activateTab = (tab: "main" | "rule" | "about") => {
+  const openSkillEditorModalEvent = () => {
+    if (!skillModal) return;
+    if (!skillModal.open) {
+      try {
+        skillModal.showModal();
+      } catch {
+        skillModal.setAttribute("open", "");
+      }
+    }
+    if (document.body.dataset.stRollSkillModalOpen !== "1") {
+      document.body.dataset.stRollSkillModalOpen = "1";
+      document.body.dataset.stRollSkillModalOverflow = document.body.style.overflow || "";
+      document.body.style.overflow = "hidden";
+    }
+  };
+
+  const activateTab = (tab: "main" | "skill" | "rule" | "about") => {
     activeTab = tab;
     const isMain = tab === "main";
+    const isSkill = tab === "skill";
     const isRule = tab === "rule";
     const isAbout = tab === "about";
     tabMain?.classList.toggle("is-active", isMain);
+    tabSkill?.classList.toggle("is-active", isSkill);
     tabRule?.classList.toggle("is-active", isRule);
     tabAbout?.classList.toggle("is-active", isAbout);
     if (panelMain) panelMain.hidden = !isMain;
+    if (panelSkill) panelSkill.hidden = !isSkill;
     if (panelRule) panelRule.hidden = !isRule;
     if (panelAbout) panelAbout.hidden = !isAbout;
+  };
+
+  const tryActivateTab = (nextTab: "main" | "skill" | "rule" | "about"): boolean => {
+    if (nextTab === activeTab) return true;
+    if (activeTab === "skill" && nextTab !== "skill" && !confirmDiscardSkillDraftEvent()) {
+      return false;
+    }
+    if (nextTab !== "skill") {
+      closeSkillEditorModalEvent();
+    }
+    activateTab(nextTab);
+    return true;
   };
 
   const applySettingsSearchFilter = () => {
@@ -884,42 +1096,110 @@ function mountSettingsCardEvent(attempt = 0): void {
     const hasMainVisible = searchableMainItems.some(
       (item) => !item.classList.contains("is-hidden-by-search")
     );
+    const hasSkillVisible = searchableSkillItems.some(
+      (item) => !item.classList.contains("is-hidden-by-search")
+    );
     const hasRuleVisible = searchableRuleItems.some(
       (item) => !item.classList.contains("is-hidden-by-search")
     );
     const hasAboutVisible = searchableAboutItems.some(
       (item) => !item.classList.contains("is-hidden-by-search")
     );
-    if (activeTab === "main" && !hasMainVisible && hasRuleVisible) {
-      activateTab("rule");
-    } else if (activeTab === "main" && !hasMainVisible && !hasRuleVisible && hasAboutVisible) {
-      activateTab("about");
-    } else if (activeTab === "rule" && !hasRuleVisible && hasMainVisible) {
-      activateTab("main");
-    } else if (activeTab === "rule" && !hasRuleVisible && !hasMainVisible && hasAboutVisible) {
-      activateTab("about");
-    } else if (activeTab === "about" && !hasAboutVisible && hasMainVisible) {
-      activateTab("main");
-    } else if (activeTab === "about" && !hasAboutVisible && !hasMainVisible && hasRuleVisible) {
-      activateTab("rule");
+
+    const hasVisibleByTab: Record<"main" | "skill" | "rule" | "about", boolean> = {
+      main: hasMainVisible,
+      skill: hasSkillVisible,
+      rule: hasRuleVisible,
+      about: hasAboutVisible,
+    };
+    if (!hasVisibleByTab[activeTab]) {
+      const fallbackOrder: Array<"main" | "skill" | "rule" | "about"> = [
+        "main",
+        "skill",
+        "rule",
+        "about",
+      ];
+      const nextTab = fallbackOrder.find((tab) => hasVisibleByTab[tab]);
+      if (nextTab) tryActivateTab(nextTab);
     }
   };
 
   activateTab("main");
   tabMain?.addEventListener("click", () => {
-    activateTab("main");
+    if (!tryActivateTab("main")) return;
+    applySettingsSearchFilter();
+  });
+  tabSkill?.addEventListener("click", () => {
+    if (!tryActivateTab("skill")) return;
     applySettingsSearchFilter();
   });
   tabRule?.addEventListener("click", () => {
-    activateTab("rule");
+    if (!tryActivateTab("rule")) return;
     applySettingsSearchFilter();
   });
   tabAbout?.addEventListener("click", () => {
-    activateTab("about");
+    if (!tryActivateTab("about")) return;
     applySettingsSearchFilter();
   });
   searchInput?.addEventListener("input", applySettingsSearchFilter);
   applySettingsSearchFilter();
+
+  skillEditorOpenBtn?.addEventListener("click", () => {
+    if (!tryActivateTab("skill")) return;
+    openSkillEditorModalEvent();
+  });
+
+  skillModalCloseBtn?.addEventListener("click", () => {
+    closeSkillEditorModalEvent();
+  });
+
+  skillModal?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.target === skillModal || target?.dataset.skillModalRole === "backdrop") {
+      closeSkillEditorModalEvent();
+    }
+  });
+
+  skillModal?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeSkillEditorModalEvent();
+  });
+
+  if (!SKILL_EDITOR_MODAL_KEYDOWN_BOUND_Event) {
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      closeSkillEditorModalEvent();
+    });
+    SKILL_EDITOR_MODAL_KEYDOWN_BOUND_Event = true;
+  }
+
+  const drawerToggle = document.getElementById(drawerToggleId) as HTMLElement | null;
+  const drawerContent = document.getElementById(drawerContentId) as HTMLElement | null;
+  drawerToggle?.addEventListener(
+    "click",
+    (event) => {
+      if (!isElementVisibleEvent(drawerContent)) return;
+      if (confirmDiscardSkillDraftEvent()) {
+        closeSkillEditorModalEvent();
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof (event as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation === "function") {
+        (event as Event & { stopImmediatePropagation: () => void }).stopImmediatePropagation();
+      }
+    },
+    true
+  );
+
+  if (!SKILL_EDITOR_BEFORE_UNLOAD_BOUND_Event) {
+    window.addEventListener("beforeunload", (event) => {
+      if (!isSkillDraftDirtyEvent()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    SKILL_EDITOR_BEFORE_UNLOAD_BOUND_Event = true;
+  }
 
   const enabledInput = document.getElementById(
     SETTINGS_ENABLED_ID_Event
@@ -960,6 +1240,51 @@ function mountSettingsCardEvent(attempt = 0): void {
   const minTimeLimitInput = document.getElementById(
     SETTINGS_TIME_LIMIT_MIN_ID_Event
   ) as HTMLInputElement | null;
+  const skillEnabledInput = document.getElementById(
+    SETTINGS_SKILL_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const skillRowsWrap = document.getElementById(
+    SETTINGS_SKILL_ROWS_ID_Event
+  ) as HTMLElement | null;
+  const skillPresetListWrap = document.getElementById(
+    SETTINGS_SKILL_PRESET_LIST_ID_Event
+  ) as HTMLElement | null;
+  const skillPresetCreateBtn = document.getElementById(
+    SETTINGS_SKILL_PRESET_CREATE_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillPresetDeleteBtn = document.getElementById(
+    SETTINGS_SKILL_PRESET_DELETE_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillPresetNameInput = document.getElementById(
+    SETTINGS_SKILL_PRESET_NAME_ID_Event
+  ) as HTMLInputElement | null;
+  const skillPresetRenameBtn = document.getElementById(
+    SETTINGS_SKILL_PRESET_RENAME_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillAddBtn = document.getElementById(
+    SETTINGS_SKILL_ADD_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillImportToggleBtn = document.getElementById(
+    SETTINGS_SKILL_IMPORT_TOGGLE_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillImportArea = document.getElementById(
+    SETTINGS_SKILL_IMPORT_AREA_ID_Event
+  ) as HTMLElement | null;
+  const skillTextInput = document.getElementById(
+    SETTINGS_SKILL_TEXT_ID_Event
+  ) as HTMLTextAreaElement | null;
+  const skillImportApplyBtn = document.getElementById(
+    SETTINGS_SKILL_IMPORT_APPLY_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillExportBtn = document.getElementById(
+    SETTINGS_SKILL_EXPORT_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillSaveBtn = document.getElementById(
+    SETTINGS_SKILL_SAVE_ID_Event
+  ) as HTMLButtonElement | null;
+  const skillResetBtn = document.getElementById(
+    SETTINGS_SKILL_RESET_ID_Event
+  ) as HTMLButtonElement | null;
   const ruleTextInput = document.getElementById(
     SETTINGS_RULE_TEXT_ID_Event
   ) as HTMLTextAreaElement | null;
@@ -1043,6 +1368,235 @@ function mountSettingsCardEvent(attempt = 0): void {
     updateSettingsEvent({ minTimeLimitSeconds: value });
   });
 
+  skillEnabledInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ enableSkillSystem: value });
+  });
+
+  skillPresetListWrap?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    const presetBtn = target?.closest<HTMLButtonElement>("button[data-skill-preset-id]");
+    if (!presetBtn) return;
+    const nextPresetId = String(presetBtn.dataset.skillPresetId ?? "");
+    if (!nextPresetId || nextPresetId === SKILL_EDITOR_ACTIVE_PRESET_ID_Event) return;
+    if (!confirmDiscardSkillDraftEvent()) return;
+    const settings = getSettingsEvent();
+    const store = getSkillPresetStoreEvent(settings);
+    const preset = getSkillPresetByIdEvent(store, nextPresetId);
+    if (!preset) return;
+    store.activePresetId = preset.id;
+    saveSkillPresetStoreEvent(store);
+  });
+
+  skillPresetCreateBtn?.addEventListener("click", () => {
+    if (!confirmDiscardSkillDraftEvent()) return;
+    const settings = getSettingsEvent();
+    const store = getSkillPresetStoreEvent(settings);
+    const activePreset = getActiveSkillPresetEvent(store);
+    const now = Date.now();
+    const name = getUniqueSkillPresetNameEvent(store, SKILL_PRESET_NEW_NAME_BASE_Event);
+    const newPreset: SkillPresetEvent = {
+      id: createIdEvent("skill_preset"),
+      name,
+      locked: false,
+      skillTableText: activePreset.skillTableText,
+      createdAt: now,
+      updatedAt: now,
+    };
+    store.presets.push(newPreset);
+    store.activePresetId = newPreset.id;
+    saveSkillPresetStoreEvent(store);
+  });
+
+  skillPresetDeleteBtn?.addEventListener("click", () => {
+    const settings = getSettingsEvent();
+    const store = getSkillPresetStoreEvent(settings);
+    const activePreset = getActiveSkillPresetEvent(store);
+    if (activePreset.locked) {
+      pushToChat("⚠️ 默认预设不可删除。");
+      return;
+    }
+    if (!confirmDiscardSkillDraftEvent()) return;
+    const confirmed = window.confirm(`确认删除预设「${activePreset.name}」吗？`);
+    if (!confirmed) return;
+    store.presets = store.presets.filter((preset) => preset.id !== activePreset.id);
+    const fallbackPreset =
+      getSkillPresetByIdEvent(store, SKILL_PRESET_DEFAULT_ID_Event) ?? store.presets[0] ?? null;
+    if (!fallbackPreset) {
+      store.presets = buildDefaultSkillPresetStoreEvent().presets;
+      store.activePresetId = SKILL_PRESET_DEFAULT_ID_Event;
+    } else {
+      store.activePresetId = fallbackPreset.id;
+    }
+    saveSkillPresetStoreEvent(store);
+  });
+
+  const handlePresetRename = () => {
+    const nextName = String(skillPresetNameInput?.value ?? "").trim();
+    if (!nextName) {
+      renderSkillValidationErrorsEvent(["预设名称不能为空。"]);
+      return;
+    }
+    const settings = getSettingsEvent();
+    const store = getSkillPresetStoreEvent(settings);
+    const activePreset = getActiveSkillPresetEvent(store);
+    const duplicated = store.presets.some(
+      (preset) =>
+        preset.id !== activePreset.id &&
+        normalizeSkillPresetNameKeyEvent(preset.name) === normalizeSkillPresetNameKeyEvent(nextName)
+    );
+    if (duplicated) {
+      renderSkillValidationErrorsEvent(["预设名称重复，请使用其他名称。"]);
+      return;
+    }
+    activePreset.name = nextName;
+    activePreset.updatedAt = Date.now();
+    saveSkillPresetStoreEvent(store);
+    renderSkillValidationErrorsEvent([]);
+  };
+
+  skillPresetRenameBtn?.addEventListener("click", handlePresetRename);
+  skillPresetNameInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    handlePresetRename();
+  });
+
+  skillRowsWrap?.addEventListener("input", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target) return;
+    const rowId = String(target.dataset.skillRowId ?? "");
+    const field = String(target.dataset.skillField ?? "");
+    if (!rowId || !field) return;
+    const row = SKILL_EDITOR_ROWS_DRAFT_Event.find((item) => item.rowId === rowId);
+    if (!row) return;
+    if (field === "name") {
+      row.skillName = target.value;
+    } else if (field === "modifier") {
+      row.modifierText = target.value;
+    }
+    refreshSkillDraftDirtyStateEvent();
+    renderSkillValidationErrorsEvent([]);
+  });
+
+  skillRowsWrap?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    const removeBtn = target?.closest<HTMLButtonElement>("button[data-skill-remove-id]");
+    if (!removeBtn) return;
+    const rowId = String(removeBtn.dataset.skillRemoveId ?? "");
+    if (!rowId) return;
+    SKILL_EDITOR_ROWS_DRAFT_Event = SKILL_EDITOR_ROWS_DRAFT_Event.filter((row) => row.rowId !== rowId);
+    renderSkillRowsEvent();
+    refreshSkillDraftDirtyStateEvent();
+    renderSkillValidationErrorsEvent([]);
+  });
+
+  skillAddBtn?.addEventListener("click", () => {
+    SKILL_EDITOR_ROWS_DRAFT_Event = [
+      ...SKILL_EDITOR_ROWS_DRAFT_Event,
+      createSkillEditorRowDraftEvent("", ""),
+    ];
+    renderSkillRowsEvent();
+    refreshSkillDraftDirtyStateEvent();
+    renderSkillValidationErrorsEvent([]);
+  });
+
+  skillImportToggleBtn?.addEventListener("click", () => {
+    if (!skillImportArea) return;
+    const willOpen = skillImportArea.hidden;
+    skillImportArea.hidden = !willOpen;
+    skillImportToggleBtn.textContent = willOpen ? "收起导入" : "导入 JSON";
+    if (!willOpen || !skillTextInput) return;
+    const serialized = serializeSkillRowsToSkillTableTextEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
+    skillTextInput.value =
+      serialized ??
+      getActiveSkillPresetEvent(getSkillPresetStoreEvent(getSettingsEvent())).skillTableText;
+  });
+
+  skillImportApplyBtn?.addEventListener("click", () => {
+    const raw = String(skillTextInput?.value ?? "");
+    if (normalizeSkillTableTextForSettingsEvent(raw) == null) {
+      renderSkillValidationErrorsEvent([
+        "导入失败：必须是 JSON 对象（例如 {\"察觉\":15,\"说服\":8}）。",
+      ]);
+      return;
+    }
+    const importedRows = deserializeSkillTableTextToRowsEvent(raw);
+    const validation = validateSkillRowsEvent(importedRows);
+    if (validation.errors.length > 0) {
+      renderSkillValidationErrorsEvent(validation.errors);
+      return;
+    }
+    SKILL_EDITOR_ROWS_DRAFT_Event = importedRows;
+    renderSkillRowsEvent();
+    refreshSkillDraftDirtyStateEvent();
+    renderSkillValidationErrorsEvent([]);
+  });
+
+  skillExportBtn?.addEventListener("click", () => {
+    const validation = validateSkillRowsEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
+    const settings = getSettingsEvent();
+    const activePreset = getActiveSkillPresetEvent(getSkillPresetStoreEvent(settings));
+    const exportText = validation.errors.length
+      ? activePreset.skillTableText
+      : JSON.stringify(validation.table, null, 2);
+    if (validation.errors.length > 0) {
+      renderSkillValidationErrorsEvent([
+        "当前草稿有校验错误，已导出已保存的技能表。",
+      ]);
+    } else {
+      renderSkillValidationErrorsEvent([]);
+    }
+    copyTextToClipboardEvent(exportText).then((ok) => {
+      if (ok) {
+        pushToChat("✅ 技能表 JSON 已复制到剪贴板。");
+        return;
+      }
+      if (skillImportArea) {
+        skillImportArea.hidden = false;
+      }
+      if (skillImportToggleBtn) {
+        skillImportToggleBtn.textContent = "收起导入";
+      }
+      if (skillTextInput) {
+        skillTextInput.value = exportText;
+      }
+      pushToChat("⚠️ 剪贴板不可用，请在导入框中手动复制 JSON。");
+    });
+  });
+
+  skillSaveBtn?.addEventListener("click", () => {
+    const validation = validateSkillRowsEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
+    if (validation.errors.length > 0) {
+      renderSkillValidationErrorsEvent(validation.errors);
+      pushToChat("❌ 技能表保存失败，请先修正校验错误。");
+      return;
+    }
+    const normalized = JSON.stringify(validation.table, null, 2);
+    const normalizedRows = deserializeSkillTableTextToRowsEvent(normalized);
+    SKILL_EDITOR_ROWS_DRAFT_Event = normalizedRows;
+    SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = buildSkillDraftSnapshotEvent(normalizedRows);
+    const settings = getSettingsEvent();
+    const store = getSkillPresetStoreEvent(settings);
+    const activePreset = getActiveSkillPresetEvent(store);
+    activePreset.skillTableText = normalized;
+    activePreset.updatedAt = Date.now();
+    renderSkillRowsEvent();
+    setSkillDraftDirtyEvent(false);
+    renderSkillValidationErrorsEvent([]);
+    saveSkillPresetStoreEvent(store);
+    if (skillTextInput) {
+      skillTextInput.value = normalized;
+    }
+  });
+
+  skillResetBtn?.addEventListener("click", () => {
+    SKILL_EDITOR_ROWS_DRAFT_Event = [];
+    renderSkillRowsEvent();
+    refreshSkillDraftDirtyStateEvent();
+    renderSkillValidationErrorsEvent([]);
+  });
+
   ruleSaveBtn?.addEventListener("click", () => {
     const value = String(ruleTextInput?.value ?? "");
     const nextValue = value.trim().length > 0 ? value : DEFAULT_RULE_TEXT_Event;
@@ -1103,6 +1657,9 @@ function syncSettingsUiEvent(): void {
   const minTimeLimitRow = document.getElementById(
     SETTINGS_TIME_LIMIT_ROW_ID_Event
   ) as HTMLElement | null;
+  const skillEnabledInput = document.getElementById(
+    SETTINGS_SKILL_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
   const ruleTextInput = document.getElementById(
     SETTINGS_RULE_TEXT_ID_Event
   ) as HTMLTextAreaElement | null;
@@ -1141,12 +1698,540 @@ function syncSettingsUiEvent(): void {
     minTimeLimitInput.style.opacity = settings.enableTimeLimit ? "1" : "0.5";
   }
   minTimeLimitRow?.classList.toggle("is-disabled", !settings.enableTimeLimit);
+  if (skillEnabledInput) {
+    skillEnabledInput.checked = Boolean(settings.enableSkillSystem);
+  }
+  if (!isSkillDraftDirtyEvent()) {
+    const currentSettingsText = String(settings.skillTableText ?? "{}");
+    const currentPresetStoreText = String(settings.skillPresetStoreText ?? "");
+    const skillRowsWrap = document.getElementById(SETTINGS_SKILL_ROWS_ID_Event) as HTMLElement | null;
+    if (
+      currentSettingsText !== SKILL_EDITOR_LAST_SETTINGS_TEXT_Event ||
+      currentPresetStoreText !== SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event ||
+      !skillRowsWrap ||
+      !skillRowsWrap.hasChildNodes()
+    ) {
+      hydrateSkillDraftFromSettingsEvent();
+    }
+  }
   if (ruleTextInput) {
     const nextText = settings.ruleText || DEFAULT_RULE_TEXT_Event;
     if (ruleTextInput.value !== nextText) {
       ruleTextInput.value = nextText;
     }
   }
+}
+
+function normalizeSkillPresetNameKeyEvent(raw: string): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+function createSkillEditorRowDraftEvent(
+  skillName: string,
+  modifierText: string
+): SkillEditorRowDraftEvent {
+  return {
+    rowId: createIdEvent("skill_row"),
+    skillName,
+    modifierText,
+  };
+}
+
+function countSkillEntriesFromSkillTableTextEvent(skillTableText: string): number {
+  const normalized = normalizeSkillTableTextForSettingsEvent(skillTableText);
+  if (normalized == null) return 0;
+  try {
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return 0;
+    return Object.keys(parsed as Record<string, any>).length;
+  } catch {
+    return 0;
+  }
+}
+
+function buildDefaultSkillPresetEvent(now = Date.now()): SkillPresetEvent {
+  return {
+    id: SKILL_PRESET_DEFAULT_ID_Event,
+    name: SKILL_PRESET_DEFAULT_NAME_Event,
+    locked: true,
+    skillTableText: DEFAULT_SKILL_PRESET_TABLE_TEXT_Event,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function buildDefaultSkillPresetStoreEvent(now = Date.now()): SkillPresetStoreEvent {
+  const preset = buildDefaultSkillPresetEvent(now);
+  return {
+    version: SKILL_PRESET_STORE_VERSION_Event,
+    activePresetId: preset.id,
+    presets: [preset],
+  };
+}
+
+function getUniqueSkillPresetNameEvent(
+  store: SkillPresetStoreEvent,
+  baseName: string,
+  excludeId = ""
+): string {
+  const trimmedBase = String(baseName ?? "").trim() || SKILL_PRESET_NEW_NAME_BASE_Event;
+  const usedKeys = new Set(
+    store.presets
+      .filter((preset) => preset.id !== excludeId)
+      .map((preset) => normalizeSkillPresetNameKeyEvent(preset.name))
+  );
+  let candidate = trimmedBase;
+  let index = 2;
+  while (usedKeys.has(normalizeSkillPresetNameKeyEvent(candidate))) {
+    candidate = `${trimmedBase} ${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function normalizeSkillPresetStoreTextForSettingsEvent(
+  raw: string,
+  legacySkillTableText: string
+): string {
+  const now = Date.now();
+  const legacyNormalized = normalizeSkillTableTextForSettingsEvent(legacySkillTableText) ?? "{}";
+  const hasLegacySkillData = legacyNormalized !== "{}";
+  const rawText = String(raw ?? "").trim();
+
+  let parsed: any = null;
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const presets: SkillPresetEvent[] = [];
+  const usedIds = new Set<string>();
+  const usedNames = new Set<string>();
+
+  const pushPreset = (presetRaw: any, index: number, fallbackName: string, lockedHint = false) => {
+    const rawId = String(presetRaw?.id ?? "").trim();
+    const baseId = rawId || createIdEvent("skill_preset");
+    let id = baseId;
+    while (usedIds.has(id)) {
+      id = `${baseId}_${Math.random().toString(36).slice(2, 7)}`;
+    }
+    usedIds.add(id);
+
+    const rawName = String(presetRaw?.name ?? "").trim();
+    const baseName = rawName || fallbackName;
+    let name = baseName;
+    let idx = 2;
+    while (usedNames.has(normalizeSkillPresetNameKeyEvent(name))) {
+      name = `${baseName} ${idx}`;
+      idx += 1;
+    }
+    usedNames.add(normalizeSkillPresetNameKeyEvent(name));
+
+    const normalizedSkillTableText =
+      normalizeSkillTableTextForSettingsEvent(String(presetRaw?.skillTableText ?? "{}")) ?? "{}";
+    const createdAtRaw = Number(presetRaw?.createdAt);
+    const createdAt = Number.isFinite(createdAtRaw) ? createdAtRaw : now;
+    const updatedAtRaw = Number(presetRaw?.updatedAt);
+    const updatedAt = Number.isFinite(updatedAtRaw) ? updatedAtRaw : createdAt;
+    presets.push({
+      id,
+      name,
+      locked: Boolean(presetRaw?.locked || lockedHint),
+      skillTableText: normalizedSkillTableText,
+      createdAt,
+      updatedAt,
+    });
+  };
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Array.isArray(parsed.presets)) {
+    parsed.presets.forEach((presetRaw: any, index: number) => {
+      pushPreset(presetRaw, index, `${SKILL_PRESET_NEW_NAME_BASE_Event} ${index + 1}`);
+    });
+  }
+
+  let defaultPreset = presets.find((preset) => preset.id === SKILL_PRESET_DEFAULT_ID_Event) ?? null;
+  if (!defaultPreset) {
+    defaultPreset = buildDefaultSkillPresetEvent(now);
+    presets.unshift(defaultPreset);
+    usedIds.add(defaultPreset.id);
+    usedNames.add(normalizeSkillPresetNameKeyEvent(defaultPreset.name));
+  } else {
+    defaultPreset.name = SKILL_PRESET_DEFAULT_NAME_Event;
+    defaultPreset.locked = true;
+  }
+
+  if (!rawText && hasLegacySkillData) {
+    const migrationPreset: SkillPresetEvent = {
+      id: createIdEvent("skill_preset_migration"),
+      name: getUniqueSkillPresetNameEvent(
+        { version: SKILL_PRESET_STORE_VERSION_Event, activePresetId: "", presets },
+        SKILL_PRESET_MIGRATION_NAME_Event
+      ),
+      locked: false,
+      skillTableText: legacyNormalized,
+      createdAt: now,
+      updatedAt: now,
+    };
+    presets.push(migrationPreset);
+  }
+
+  if (!presets.length) {
+    presets.push(buildDefaultSkillPresetEvent(now));
+  }
+
+  let activePresetId = String(parsed?.activePresetId ?? "").trim();
+  if (!activePresetId || !presets.some((preset) => preset.id === activePresetId)) {
+    if (!rawText && hasLegacySkillData) {
+      const migration = presets.find((preset) => preset.name.includes(SKILL_PRESET_MIGRATION_NAME_Event));
+      activePresetId = migration?.id ?? SKILL_PRESET_DEFAULT_ID_Event;
+    } else {
+      activePresetId = SKILL_PRESET_DEFAULT_ID_Event;
+    }
+  }
+
+  const normalizedStore: SkillPresetStoreEvent = {
+    version: SKILL_PRESET_STORE_VERSION_Event,
+    activePresetId,
+    presets,
+  };
+  return JSON.stringify(normalizedStore, null, 2);
+}
+
+function parseSkillPresetStoreTextEvent(raw: string): SkillPresetStoreEvent | null {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (Number((parsed as any).version) !== SKILL_PRESET_STORE_VERSION_Event) return null;
+    if (!Array.isArray((parsed as any).presets)) return null;
+    const activePresetId = String((parsed as any).activePresetId ?? "").trim();
+    const presets = (parsed as any).presets as any[];
+    if (!activePresetId || !presets.length) return null;
+    return parsed as SkillPresetStoreEvent;
+  } catch {
+    return null;
+  }
+}
+
+function getSkillPresetStoreEvent(settings = getSettingsEvent()): SkillPresetStoreEvent {
+  const rawStoreText = String(settings.skillPresetStoreText ?? "");
+  const normalizedStoreText = normalizeSkillPresetStoreTextForSettingsEvent(
+    rawStoreText,
+    settings.skillTableText
+  );
+  const parsed = parseSkillPresetStoreTextEvent(normalizedStoreText);
+  if (parsed) return parsed;
+  return buildDefaultSkillPresetStoreEvent();
+}
+
+function getSkillPresetByIdEvent(
+  store: SkillPresetStoreEvent,
+  presetId: string
+): SkillPresetEvent | null {
+  const id = String(presetId ?? "").trim();
+  if (!id) return null;
+  return store.presets.find((preset) => preset.id === id) ?? null;
+}
+
+function getActiveSkillPresetEvent(store: SkillPresetStoreEvent): SkillPresetEvent {
+  const explicit = getSkillPresetByIdEvent(store, store.activePresetId);
+  if (explicit) return explicit;
+  const fallbackDefault = getSkillPresetByIdEvent(store, SKILL_PRESET_DEFAULT_ID_Event);
+  if (fallbackDefault) return fallbackDefault;
+  return store.presets[0] ?? buildDefaultSkillPresetEvent();
+}
+
+function syncActivePresetToSkillTableTextEvent(
+  store: SkillPresetStoreEvent,
+  fallbackSkillTableText = "{}"
+): string {
+  const activePreset = getActiveSkillPresetEvent(store);
+  const normalized =
+    normalizeSkillTableTextForSettingsEvent(activePreset.skillTableText) ??
+    normalizeSkillTableTextForSettingsEvent(fallbackSkillTableText) ??
+    "{}";
+  activePreset.skillTableText = normalized;
+  return normalized;
+}
+
+function saveSkillPresetStoreEvent(store: SkillPresetStoreEvent): void {
+  const settings = getSettingsEvent();
+  const normalizedStoreText = normalizeSkillPresetStoreTextForSettingsEvent(
+    JSON.stringify(store),
+    settings.skillTableText
+  );
+  const normalizedStore =
+    parseSkillPresetStoreTextEvent(normalizedStoreText) ?? buildDefaultSkillPresetStoreEvent();
+  const activeSkillTableText = syncActivePresetToSkillTableTextEvent(
+    normalizedStore,
+    settings.skillTableText
+  );
+  updateSettingsEvent({
+    skillPresetStoreText: JSON.stringify(normalizedStore, null, 2),
+    skillTableText: activeSkillTableText,
+  });
+}
+
+function buildSkillDraftSnapshotEvent(rows: SkillEditorRowDraftEvent[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      skillName: String(row.skillName ?? ""),
+      modifierText: String(row.modifierText ?? ""),
+    }))
+  );
+}
+
+function setSkillDraftDirtyEvent(flag: boolean): void {
+  SKILL_EDITOR_DIRTY_Event = Boolean(flag);
+  const dirtyHint = document.getElementById(SETTINGS_SKILL_DIRTY_HINT_ID_Event) as HTMLElement | null;
+  if (dirtyHint) {
+    dirtyHint.hidden = !SKILL_EDITOR_DIRTY_Event;
+  }
+}
+
+function isSkillDraftDirtyEvent(): boolean {
+  return SKILL_EDITOR_DIRTY_Event;
+}
+
+function refreshSkillDraftDirtyStateEvent(): void {
+  const snapshot = buildSkillDraftSnapshotEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
+  setSkillDraftDirtyEvent(snapshot !== SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event);
+}
+
+function renderSkillValidationErrorsEvent(errors: string[]): void {
+  const errorWrap = document.getElementById(SETTINGS_SKILL_ERRORS_ID_Event) as HTMLElement | null;
+  if (!errorWrap) return;
+  if (!errors.length) {
+    errorWrap.hidden = true;
+    errorWrap.innerHTML = "";
+    return;
+  }
+  errorWrap.hidden = false;
+  errorWrap.innerHTML = errors
+    .map((item) => `<div class="st-roll-skill-error-item">${escapeHtmlEvent(item)}</div>`)
+    .join("");
+}
+
+function deserializeSkillTableTextToRowsEvent(skillTableText: string): SkillEditorRowDraftEvent[] {
+  const text = String(skillTableText ?? "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    return Object.entries(parsed as Record<string, any>).map(([skillName, modifier]) =>
+      createSkillEditorRowDraftEvent(String(skillName ?? ""), String(modifier ?? ""))
+    );
+  } catch {
+    return [];
+  }
+}
+
+function validateSkillRowsEvent(rows: SkillEditorRowDraftEvent[]): {
+  errors: string[];
+  table: Record<string, number>;
+} {
+  const errors: string[] = [];
+  const table: Record<string, number> = {};
+  const seenRowByKey = new Map<string, number>();
+  const integerPattern = /^[+-]?\d+$/;
+
+  rows.forEach((row, index) => {
+    const rowNo = index + 1;
+    const rawName = String(row.skillName ?? "");
+    const rawModifier = String(row.modifierText ?? "");
+    const skillName = rawName.trim();
+    const normalizedSkillKey = normalizeSkillKeyEvent(skillName);
+    let rowHasError = false;
+
+    if (!skillName) {
+      errors.push(`第 ${rowNo} 行：技能名不能为空`);
+      rowHasError = true;
+    }
+
+    let modifierValue = 0;
+    const modifierText = rawModifier.trim();
+    if (!modifierText) {
+      errors.push(`第 ${rowNo} 行：加值不能为空`);
+      rowHasError = true;
+    } else if (!integerPattern.test(modifierText)) {
+      errors.push(`第 ${rowNo} 行：加值必须是整数`);
+      rowHasError = true;
+    } else {
+      modifierValue = Number(modifierText);
+      if (!Number.isFinite(modifierValue)) {
+        errors.push(`第 ${rowNo} 行：加值必须是有限整数`);
+        rowHasError = true;
+      }
+    }
+
+    if (normalizedSkillKey) {
+      const duplicatedRow = seenRowByKey.get(normalizedSkillKey);
+      if (duplicatedRow != null) {
+        errors.push(`第 ${rowNo} 行：技能名与第 ${duplicatedRow + 1} 行重复`);
+        rowHasError = true;
+      } else {
+        seenRowByKey.set(normalizedSkillKey, index);
+      }
+    }
+
+    if (!rowHasError && normalizedSkillKey) {
+      table[normalizedSkillKey] = modifierValue;
+    }
+  });
+
+  return { errors, table };
+}
+
+function serializeSkillRowsToSkillTableTextEvent(rows: SkillEditorRowDraftEvent[]): string | null {
+  const validation = validateSkillRowsEvent(rows);
+  if (validation.errors.length > 0) return null;
+  return JSON.stringify(validation.table, null, 2);
+}
+
+function renderSkillPresetListEvent(store: SkillPresetStoreEvent): void {
+  const listWrap = document.getElementById(SETTINGS_SKILL_PRESET_LIST_ID_Event) as HTMLElement | null;
+  if (!listWrap) return;
+  if (!store.presets.length) {
+    listWrap.innerHTML = `<div class="st-roll-skill-preset-empty">暂无预设</div>`;
+    return;
+  }
+  listWrap.innerHTML = store.presets
+    .map((preset) => {
+      const isActive = preset.id === store.activePresetId;
+      const skillCount = countSkillEntriesFromSkillTableTextEvent(preset.skillTableText);
+      const presetId = escapeAttrEvent(preset.id);
+      const presetName = escapeHtmlEvent(preset.name);
+      return `
+        <button type="button" class="st-roll-skill-preset-item ${isActive ? "is-active" : ""}" data-skill-preset-id="${presetId}">
+          <span class="st-roll-skill-preset-name">${presetName}</span>
+          <span class="st-roll-skill-preset-tags">
+            <span class="st-roll-skill-preset-tag">${skillCount}</span>
+            ${isActive ? `<span class="st-roll-skill-preset-tag active">生效中</span>` : ""}
+            ${preset.locked ? `<span class="st-roll-skill-preset-tag locked">默认</span>` : ""}
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderSkillPresetMetaEvent(store: SkillPresetStoreEvent): void {
+  const activePreset = getActiveSkillPresetEvent(store);
+  const meta = document.getElementById(SETTINGS_SKILL_PRESET_META_ID_Event) as HTMLElement | null;
+  if (meta) {
+    const count = countSkillEntriesFromSkillTableTextEvent(activePreset.skillTableText);
+    meta.textContent = `当前预设：${activePreset.name}（技能 ${count} 项）`;
+  }
+  const nameInput = document.getElementById(SETTINGS_SKILL_PRESET_NAME_ID_Event) as HTMLInputElement | null;
+  if (nameInput && nameInput.value !== activePreset.name) {
+    nameInput.value = activePreset.name;
+  }
+  const deleteBtn = document.getElementById(
+    SETTINGS_SKILL_PRESET_DELETE_ID_Event
+  ) as HTMLButtonElement | null;
+  if (deleteBtn) {
+    deleteBtn.disabled = activePreset.locked;
+    deleteBtn.style.opacity = activePreset.locked ? "0.5" : "1";
+    deleteBtn.title = activePreset.locked ? "默认预设不可删除" : "";
+  }
+}
+
+function renderSkillRowsEvent(): void {
+  const rowsWrap = document.getElementById(SETTINGS_SKILL_ROWS_ID_Event) as HTMLElement | null;
+  if (!rowsWrap) return;
+  if (!SKILL_EDITOR_ROWS_DRAFT_Event.length) {
+    rowsWrap.innerHTML = `<div class="st-roll-skill-empty">暂无技能，点击“新增技能”开始配置。</div>`;
+    return;
+  }
+  rowsWrap.innerHTML = SKILL_EDITOR_ROWS_DRAFT_Event.map((row) => {
+    const rowId = escapeAttrEvent(String(row.rowId ?? ""));
+    const skillName = escapeAttrEvent(String(row.skillName ?? ""));
+    const modifierText = escapeAttrEvent(String(row.modifierText ?? ""));
+    return `
+      <div class="st-roll-skill-row" data-row-id="${rowId}">
+        <input
+          class="st-roll-input st-roll-skill-name"
+          type="text"
+          placeholder="例如：察觉"
+          data-skill-row-id="${rowId}"
+          data-skill-field="name"
+          value="${skillName}"
+        />
+        <input
+          class="st-roll-input st-roll-skill-modifier"
+          type="text"
+          inputmode="numeric"
+          placeholder="例如：15"
+          data-skill-row-id="${rowId}"
+          data-skill-field="modifier"
+          value="${modifierText}"
+        />
+        <button type="button" class="st-roll-btn secondary st-roll-skill-remove" data-skill-remove-id="${rowId}">
+          删除
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function hydrateSkillDraftFromSettingsEvent(force = false): void {
+  if (!force && isSkillDraftDirtyEvent()) return;
+  const settings = getSettingsEvent();
+  const store = getSkillPresetStoreEvent(settings);
+  const normalizedStoreText = JSON.stringify(store, null, 2);
+  const activePreset = getActiveSkillPresetEvent(store);
+  const activeSkillTableNormalized = normalizeSkillTableTextForSettingsEvent(activePreset.skillTableText);
+  const activeSkillTableText = activeSkillTableNormalized ?? "{}";
+
+  if (activeSkillTableNormalized == null) {
+    SKILL_EDITOR_ROWS_DRAFT_Event = [];
+    if (SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event !== activePreset.skillTableText) {
+      SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = activePreset.skillTableText;
+      console.warn("[骰子插件] 技能预设配置无效，已按空表载入");
+      pushToChat("⚠️ 技能预设配置格式无效，已按空表载入。");
+    }
+  } else {
+    SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = "";
+    SKILL_EDITOR_ROWS_DRAFT_Event = deserializeSkillTableTextToRowsEvent(activeSkillTableText);
+  }
+
+  SKILL_EDITOR_ACTIVE_PRESET_ID_Event = activePreset.id;
+  SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = buildSkillDraftSnapshotEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
+  SKILL_EDITOR_LAST_SETTINGS_TEXT_Event = activeSkillTableText;
+  SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event = normalizedStoreText;
+  setSkillDraftDirtyEvent(false);
+  renderSkillValidationErrorsEvent([]);
+  renderSkillPresetListEvent(store);
+  renderSkillPresetMetaEvent(store);
+  renderSkillRowsEvent();
+}
+
+function confirmDiscardSkillDraftEvent(): boolean {
+  if (!isSkillDraftDirtyEvent()) return true;
+  const confirmed = window.confirm("技能改动未保存，是否丢弃并继续？");
+  if (!confirmed) return false;
+  hydrateSkillDraftFromSettingsEvent(true);
+  return true;
+}
+
+function isElementVisibleEvent(element: HTMLElement | null): boolean {
+  if (!element || element.hidden) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function copyTextToClipboardEvent(text: string): Promise<boolean> {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+    return Promise.resolve(false);
+  }
+  return navigator.clipboard
+    .writeText(text)
+    .then(() => true)
+    .catch(() => false);
 }
 
 function getMessageTextEvent(message: TavernMessageEvent | undefined): string {
@@ -1248,9 +2333,18 @@ function buildDiceRuleBlockCompactEvent(): string {
       ? settings.ruleText
       : DEFAULT_RULE_TEXT_Event;
   const ruleText = rawRuleText.replace(/\[\/?DICE_EVENT_RULES\]/g, "").trim();
+  let skillRuleSection = "";
+  if (settings.enableSkillSystem) {
+    const skillTable = getSkillModifierTableMapEvent(settings);
+    const skillTableJson = JSON.stringify(skillTable);
+    const store = getSkillPresetStoreEvent(settings);
+    const activePreset = getActiveSkillPresetEvent(store);
+    const presetNameLine = String(activePreset.name ?? "").replace(/\s+/g, " ").trim() || "unnamed";
+    skillRuleSection = `\n[SKILL_SYSTEM]\nenabled=true\npreset_id=${activePreset.id}\npreset_name=${presetNameLine}\nskill_table=${skillTableJson}\n说明：event.skill 会匹配 skill_table 的 key（trim + lowercase），命中后作为技能修正加到检定总值。\n[/SKILL_SYSTEM]`;
+  }
 
   return `${DICE_RULE_BLOCK_START_Event}
-${ruleText}
+${ruleText}${skillRuleSection}
 ${DICE_RULE_BLOCK_END_Event}`;
 }
 
@@ -1286,6 +2380,7 @@ function createRoundSummarySnapshotEvent(
       id: event.id,
       title: event.title,
       desc: event.desc,
+      targetLabel: event.targetLabel,
       skill: event.skill,
       checkDice: event.checkDice,
       compare: normalizeCompareOperatorEvent(event.compare) ?? ">=",
@@ -1295,6 +2390,9 @@ function createRoundSummarySnapshotEvent(
       status,
       resultSource: record?.source ?? null,
       total,
+      skillModifierApplied: Number(record?.skillModifierApplied ?? 0),
+      baseModifierUsed: Number(record?.baseModifierUsed ?? 0),
+      finalModifierUsed: Number(record?.finalModifierUsed ?? 0),
       success,
       outcomeKind: resolvedOutcome.kind,
       outcomeText: resolvedOutcome.text,
@@ -1397,13 +2495,26 @@ function buildSummaryEventNaturalLineByModeEvent(
 ): string {
   const title = truncateSummaryTextEvent(item.title, 48);
   const desc = truncateSummaryTextEvent(item.desc, getSummaryDescMaxLenByModeEvent(detailMode));
+  const target = truncateSummaryTextEvent(item.targetLabel || "未指定", 20);
   const resultSentence = toSummaryResultSentenceEvent(item);
   const outcomeSentence = includeOutcomeInSummary ? toSummaryOutcomeSentenceEvent(item) : "";
+  const baseModifierUsed = Number.isFinite(Number(item.baseModifierUsed))
+    ? Number(item.baseModifierUsed)
+    : 0;
+  const skillModifierApplied = Number.isFinite(Number(item.skillModifierApplied))
+    ? Number(item.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(item.finalModifierUsed))
+    ? Number(item.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
+  const modifierSentence = `修正 ${formatModifier(baseModifierUsed)} + 技能 ${formatModifier(
+    skillModifierApplied
+  )} = ${formatModifier(finalModifierUsed)}`;
 
   if (detailMode === "minimal") {
     return includeOutcomeInSummary
-      ? `- 标题：${title}｜描述：${desc}｜结果：${resultSentence}｜${outcomeSentence}`
-      : `- 标题：${title}｜描述：${desc}｜结果：${resultSentence}`;
+      ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜结果：${resultSentence}｜${outcomeSentence}`
+      : `- 标题：${title}｜对象：${target}｜描述：${desc}｜结果：${resultSentence}`;
   }
 
   const skill = truncateSummaryTextEvent(item.skill, 20);
@@ -1412,15 +2523,15 @@ function buildSummaryEventNaturalLineByModeEvent(
 
   if (detailMode === "balanced") {
     return includeOutcomeInSummary
-      ? `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜结果：${resultSentence}｜${outcomeSentence}`
-      : `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜结果：${resultSentence}`;
+      ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜结果：${resultSentence}｜${outcomeSentence}`
+      : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜结果：${resultSentence}`;
   }
 
   const sourceText = toSummarySourceTextEvent(item.resultSource);
   const timeLimit = truncateSummaryTextEvent(item.timeLimit || "none", 26);
   return includeOutcomeInSummary
-    ? `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}｜${outcomeSentence}`
-    : `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}`;
+    ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}｜${outcomeSentence}`
+    : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}`;
 }
 
 function buildSummaryBlockFromHistoryEvent(
@@ -1440,7 +2551,7 @@ function buildSummaryBlockFromHistoryEvent(
   const lines: string[] = [];
   lines.push(DICE_SUMMARY_BLOCK_START_Event);
   lines.push(
-    `v=4 fmt=nl detail=${detailMode} window_rounds=${roundsWindow} included_rounds=${selected.length} include_outcome=${includeOutcomeInSummary ? "1" : "0"}`
+    `v=5 fmt=nl detail=${detailMode} window_rounds=${roundsWindow} included_rounds=${selected.length} include_outcome=${includeOutcomeInSummary ? "1" : "0"}`
   );
 
   let emittedEventLines = 0;
@@ -1575,7 +2686,7 @@ function composePromptInjectionsEvent(promptChat: TavernMessageEvent[]): string 
       };
       const currentChars = summaryToInject.length;
       console.info(
-        `[骰子插件] DICE_ROUND_SUMMARY chars=${currentChars} detail=${settings.summaryDetailMode} rounds=${settings.summaryHistoryRounds} includeOutcome=${settings.includeOutcomeInSummary} format=nl-v4`
+        `[骰子插件] DICE_ROUND_SUMMARY chars=${currentChars} detail=${settings.summaryDetailMode} rounds=${settings.summaryHistoryRounds} includeOutcome=${settings.includeOutcomeInSummary} format=nl-v5`
       );
       changed = true;
     } else if (meta.outboundSummary) {
@@ -1661,6 +2772,78 @@ function normalizeCompareOperatorEvent(raw: any): CompareOperatorEvent | null {
 
 function normalizeStringFieldEvent(raw: any): string {
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+function normalizeSkillKeyEvent(raw: any): string {
+  return normalizeStringFieldEvent(raw).toLowerCase();
+}
+
+function normalizeSkillTableObjectEvent(raw: any): Record<string, number> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const normalized: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, any>)) {
+    const normalizedKey = normalizeSkillKeyEvent(key);
+    if (!normalizedKey) continue;
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) continue;
+    normalized[normalizedKey] = numericValue;
+  }
+  return normalized;
+}
+
+function normalizeSkillTableTextForSettingsEvent(raw: string): string | null {
+  const text = String(raw ?? "").trim();
+  if (!text) return "{}";
+  try {
+    const parsed = JSON.parse(text);
+    const normalized = normalizeSkillTableObjectEvent(parsed);
+    if (normalized == null) return null;
+    return JSON.stringify(normalized, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+let SKILL_TABLE_CACHE_TEXT_Event = "";
+let SKILL_TABLE_CACHE_MAP_Event: Record<string, number> = {};
+
+function getSkillModifierTableMapEvent(settings: DicePluginSettingsEvent): Record<string, number> {
+  const rawText = String(settings.skillTableText ?? "").trim();
+  if (rawText === SKILL_TABLE_CACHE_TEXT_Event) {
+    return SKILL_TABLE_CACHE_MAP_Event;
+  }
+  SKILL_TABLE_CACHE_TEXT_Event = rawText;
+  if (!rawText) {
+    SKILL_TABLE_CACHE_MAP_Event = {};
+    return SKILL_TABLE_CACHE_MAP_Event;
+  }
+  try {
+    const parsed = JSON.parse(rawText);
+    const normalized = normalizeSkillTableObjectEvent(parsed);
+    if (normalized == null) {
+      console.warn("[骰子插件] skillTableText 不是 JSON 对象，已按空表处理");
+      SKILL_TABLE_CACHE_MAP_Event = {};
+      return SKILL_TABLE_CACHE_MAP_Event;
+    }
+    SKILL_TABLE_CACHE_MAP_Event = normalized;
+    return SKILL_TABLE_CACHE_MAP_Event;
+  } catch (error) {
+    console.warn("[骰子插件] skillTableText 解析失败，已按空表处理", error);
+    SKILL_TABLE_CACHE_MAP_Event = {};
+    return SKILL_TABLE_CACHE_MAP_Event;
+  }
+}
+
+function resolveSkillModifierBySkillNameEvent(
+  skillName: string,
+  settings = getSettingsEvent()
+): number {
+  if (!settings.enableSkillSystem) return 0;
+  const key = normalizeSkillKeyEvent(skillName);
+  if (!key) return 0;
+  const table = getSkillModifierTableMapEvent(settings);
+  const value = Number(table[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function normalizeOutcomeTextEvent(
@@ -1813,6 +2996,27 @@ function createSyntheticTimeoutDiceResultEvent(event: DiceEventSpecEvent): DiceR
   };
 }
 
+function applySkillModifierToDiceResultEvent(
+  result: DiceResult,
+  skillModifier: number
+): { result: DiceResult; baseModifierUsed: number; finalModifierUsed: number } {
+  const baseModifierUsed = Number.isFinite(Number(result.modifier)) ? Number(result.modifier) : 0;
+  const numericSkillModifier = Number.isFinite(Number(skillModifier)) ? Number(skillModifier) : 0;
+  const finalModifierUsed = baseModifierUsed + numericSkillModifier;
+  if (numericSkillModifier === 0) {
+    return { result, baseModifierUsed, finalModifierUsed };
+  }
+  return {
+    result: {
+      ...result,
+      modifier: finalModifierUsed,
+      total: Number(result.rawTotal) + finalModifierUsed,
+    },
+    baseModifierUsed,
+    finalModifierUsed,
+  };
+}
+
 function ensureEventTimerIndexEvent(
   round: PendingRoundEvent
 ): Record<string, EventTimerStateEvent> {
@@ -1840,6 +3044,15 @@ function ensureRoundEventTimersSyncedEvent(round: PendingRoundEvent): void {
 
   for (const event of round.events) {
     keepIds.add(event.id);
+    if (!event.targetType || !event.targetLabel) {
+      const resolvedTarget = resolveEventTargetEvent(
+        { type: (event as any).targetType, name: (event as any).targetName },
+        event.scope
+      );
+      event.targetType = resolvedTarget.targetType;
+      event.targetName = resolvedTarget.targetName;
+      event.targetLabel = resolvedTarget.targetLabel;
+    }
     const parsedDurationMs =
       typeof event.timeLimitMs === "number" && Number.isFinite(event.timeLimitMs)
         ? Math.max(0, event.timeLimitMs)
@@ -1930,10 +3143,80 @@ function normalizeEventRollModeEvent(raw: any): EventRollModeEvent | undefined {
   return undefined;
 }
 
+function normalizeEventTargetTypeEvent(raw: any): EventTargetTypeEvent | undefined {
+  const value = normalizeStringFieldEvent(raw).toLowerCase();
+  if (!value) return undefined;
+  if (
+    value === "self" ||
+    value === "protagonist" ||
+    value === "player" ||
+    value === "mc" ||
+    value === "main_character"
+  ) {
+    return "self";
+  }
+  if (value === "scene" || value === "situation" || value === "environment" || value === "context") {
+    return "scene";
+  }
+  if (
+    value === "supporting" ||
+    value === "character" ||
+    value === "npc" ||
+    value === "assistant"
+  ) {
+    return "supporting";
+  }
+  if (value === "object" || value === "item" || value === "thing" || value === "prop") {
+    return "object";
+  }
+  if (value === "other" || value === "misc") {
+    return "other";
+  }
+  return undefined;
+}
+
+function formatEventTargetLabelEvent(type: EventTargetTypeEvent, name?: string): string {
+  const normalizedName = normalizeStringFieldEvent(name);
+  if (type === "self") return "主角自己";
+  if (type === "scene") return "情景";
+  if (type === "supporting") return normalizedName ? `配角${normalizedName}` : "配角";
+  if (type === "object") return normalizedName ? `物件${normalizedName}` : "物件";
+  return normalizedName ? `其他对象${normalizedName}` : "其他对象";
+}
+
+function resolveEventTargetEvent(
+  raw: any,
+  scope?: EventScopeTagEvent
+): { targetType: EventTargetTypeEvent; targetName?: string; targetLabel: string } {
+  const payload =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, any>)
+      : ({} as Record<string, any>);
+  let targetType = normalizeEventTargetTypeEvent(
+    payload.type ?? payload.targetType ?? payload.kind ?? raw
+  );
+  const targetName = normalizeStringFieldEvent(
+    payload.name ?? payload.targetName ?? payload.label ?? payload.value
+  );
+  if (!targetType) {
+    if (scope === "protagonist") targetType = "self";
+    else if (scope === "character") targetType = "supporting";
+    else targetType = "scene";
+  }
+  const normalizedTargetName = targetName || undefined;
+  return {
+    targetType,
+    targetName: normalizedTargetName,
+    targetLabel: formatEventTargetLabelEvent(targetType, normalizedTargetName),
+  };
+}
+
 function isLikelyProtagonistActionEvent(event: DiceEventSpecEvent): boolean {
+  if (event.targetType === "self") return true;
+  if (event.targetType === "supporting" || event.targetType === "object") return false;
   if (event.scope === "protagonist" || event.scope === "all") return true;
   if (event.scope === "character") return false;
-  const text = `${event.title}\n${event.desc}\n${event.skill}`;
+  const text = `${event.title}\n${event.desc}\n${event.skill}\n${event.targetLabel}`;
   return /(你|你要|你需要|你必须|玩家|主角|\byou\b|\byour\b|\bplayer\b|\bprotagonist\b)/i.test(
     text
   );
@@ -1958,6 +3241,10 @@ function normalizeEventSpecEvent(raw: any): DiceEventSpecEvent | null {
   const desc = normalizeStringFieldEvent(raw.desc);
   const compare = normalizeCompareOperatorEvent(raw.compare);
   const scope = normalizeEventScopeTagEvent(raw.scope ?? raw.eventScope ?? raw.applyTo);
+  const resolvedTarget = resolveEventTargetEvent(
+    raw.target ?? { type: raw.targetType, name: raw.targetName ?? raw.targetLabel },
+    scope
+  );
   const rollMode = normalizeEventRollModeEvent(raw.rollMode);
   const dc = Number(raw.dc);
   const aliasOutcomes = {
@@ -1994,6 +3281,9 @@ function normalizeEventSpecEvent(raw: any): DiceEventSpecEvent | null {
     scope,
     rollMode,
     skill,
+    targetType: resolvedTarget.targetType,
+    targetName: resolvedTarget.targetName,
+    targetLabel: resolvedTarget.targetLabel,
     timeLimitMs,
     timeLimit,
     desc,
@@ -2254,9 +3544,13 @@ function createTimeoutFailureRecordEvent(
   event: DiceEventSpecEvent,
   now: number
 ): EventRollRecordEvent {
+  const settings = getSettingsEvent();
   const compareUsed = normalizeCompareOperatorEvent(event.compare) ?? ">=";
   const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
   const result = createSyntheticTimeoutDiceResultEvent(event);
+  const baseModifierUsed = Number(result.modifier) || 0;
+  const skillModifierApplied = resolveSkillModifierBySkillNameEvent(event.skill, settings);
+  const finalModifierUsed = baseModifierUsed + skillModifierApplied;
   return {
     rollId: createIdEvent("eroll"),
     roundId: round.roundId,
@@ -2267,6 +3561,10 @@ function createTimeoutFailureRecordEvent(
     success: false,
     compareUsed,
     dcUsed,
+    skillModifierApplied,
+    baseModifierUsed,
+    finalModifierUsed,
+    targetLabelUsed: event.targetLabel,
     rolledAt: now,
     source: "timeout_auto_fail",
     timeoutAt: now,
@@ -2379,6 +3677,15 @@ function formatRollRecordSummaryEvent(
   event?: DiceEventSpecEvent
 ): string {
   const settings = getSettingsEvent();
+  const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
+    ? Number(record.baseModifierUsed)
+    : Number(record.result.modifier) || 0;
+  const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
+    ? Number(record.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
+    ? Number(record.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
   let outcomeTag = "";
   if (settings.enableOutcomeBranches) {
     const resolved = event
@@ -2394,18 +3701,27 @@ function formatRollRecordSummaryEvent(
       outcomeTag = ` | 走向:${resolved.kind}`;
     }
   }
+  const targetLabel = record.targetLabelUsed || event?.targetLabel || "";
+  const targetTag = targetLabel ? ` | 对象:${targetLabel}` : "";
+  const modifierTag = settings.enableSkillSystem
+    ? ` | 修正:${formatEventModifierBreakdownEvent(
+        baseModifierUsed,
+        skillModifierApplied,
+        finalModifierUsed
+      )}`
+    : "";
 
   if (record.source === "timeout_auto_fail") {
-    return `超时自动判定失败${outcomeTag}`;
+    return `超时自动判定失败${targetTag}${modifierTag}${outcomeTag}`;
   }
   if (record.source === "ai_auto_roll") {
     const status =
       record.success === null ? "未判定" : record.success ? "成功" : "失败";
-    return `AI自动检定，总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${outcomeTag}`;
+    return `AI自动检定，总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${outcomeTag}`;
   }
   const status =
     record.success === null ? "未判定" : record.success ? "成功" : "失败";
-  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${outcomeTag}`;
+  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${outcomeTag}`;
 }
 
 type EventRuntimeToneEvent = "neutral" | "warn" | "danger" | "success";
@@ -2622,15 +3938,15 @@ function buildOutcomePreviewHtmlEvent(
         <span style="margin-left:8px; flex-grow:1; height:1px; background:linear-gradient(270deg, transparent, rgba(197,160,89,0.4));"></span>
       </div>
       <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
-        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(82,196,26,0.15); border:1px solid rgba(82,196,26,0.4); border-radius:4px; color:#73d13d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(82,196,26,0.1);">SUCCESS</span>
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(82,196,26,0.15); border:1px solid rgba(82,196,26,0.4); border-radius:4px; color:#73d13d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(82,196,26,0.1);">成功</span>
         <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(success)}</span>
       </div>
       <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
-        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(255,77,79,0.15); border:1px solid rgba(255,77,79,0.4); border-radius:4px; color:#ff7875; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(255,77,79,0.1);">FAILURE</span>
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(255,77,79,0.15); border:1px solid rgba(255,77,79,0.4); border-radius:4px; color:#ff7875; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(255,77,79,0.1);">失败</span>
         <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(failure)}</span>
       </div>
       <div style="display:flex; align-items:flex-start;">
-        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(250,173,20,0.15); border:1px solid rgba(250,173,20,0.4); border-radius:4px; color:#ffc53d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(250,173,20,0.1);">EXPLODE</span>
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(250,173,20,0.15); border:1px solid rgba(250,173,20,0.4); border-radius:4px; color:#ffc53d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(250,173,20,0.1);">爆骰</span>
         <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(explode)}</span>
       </div>
     </div>
@@ -2682,6 +3998,17 @@ function buildEventListCardEvent(round: PendingRoundEvent): string {
           ? event.timeLimit
           : "none"
         : "off";
+      let baseModifierUsed = 0;
+      try {
+        baseModifierUsed = parseDiceExpression(event.checkDice).modifier;
+      } catch {
+        baseModifierUsed = 0;
+      }
+      const skillModifierApplied = resolveSkillModifierBySkillNameEvent(event.skill, settings);
+      const finalModifierUsed = baseModifierUsed + skillModifierApplied;
+      const modifierText = settings.enableSkillSystem
+        ? formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
+        : "";
 
       const rollButtonHtml = showRollButton
         ? buildEventRollButtonTemplateEvent({
@@ -2697,7 +4024,9 @@ function buildEventListCardEvent(round: PendingRoundEvent): string {
         titleHtml: escapeHtmlEvent(event.title),
         eventIdHtml: escapeHtmlEvent(event.id),
         descHtml: escapeHtmlEvent(event.desc),
+        targetHtml: escapeHtmlEvent(event.targetLabel),
         skillHtml: escapeHtmlEvent(event.skill),
+        modifierTextHtml: escapeHtmlEvent(modifierText),
         checkDiceHtml: escapeHtmlEvent(event.checkDice),
         compareHtml: escapeHtmlEvent(compare),
         dcText: String(event.dc),
@@ -2814,18 +4143,32 @@ function buildEventRollResultCardEvent(
     record.source === "timeout_auto_fail"
       ? ""
       : buildAnimatedDiceVisualBlockEvent(record.result, true);
+  const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
+    ? Number(record.baseModifierUsed)
+    : Number(record.result.modifier) || 0;
+  const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
+    ? Number(record.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
+    ? Number(record.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
+  const modifierBreakdownHtml = settings.enableSkillSystem
+    ? formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
+    : "";
 
   return buildEventRollResultCardTemplateEvent({
     rollIdHtml: escapeHtmlEvent(record.rollId),
     titleHtml: escapeHtmlEvent(event.title),
     eventIdHtml: escapeHtmlEvent(event.id),
     sourceHtml: escapeHtmlEvent(sourceText),
+    targetHtml: escapeHtmlEvent(record.targetLabelUsed || event.targetLabel),
     skillHtml: escapeHtmlEvent(event.skill),
     diceExprHtml: escapeHtmlEvent(record.diceExpr),
     rollsSummaryHtml: buildRollsSummaryTemplateEvent(
       escapeHtmlEvent(record.result.rolls.join(", ")),
       escapeHtmlEvent(formatModifier(record.result.modifier))
     ),
+    modifierBreakdownHtml: escapeHtmlEvent(modifierBreakdownHtml),
     compareHtml: escapeHtmlEvent(record.compareUsed),
     dcText: String(record.dcUsed ?? "N/A"),
     statusText: status,
@@ -2861,6 +4204,18 @@ function buildEventAlreadyRolledCardEvent(
   const statusColor = record.success === null ? "#a3957a" : record.success ? "#52c41a" : "#ff4d4f";
 
   const diceVisualBlock = isTimeout ? "" : buildAnimatedDiceVisualBlockEvent(record.result);
+  const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
+    ? Number(record.baseModifierUsed)
+    : Number(record.result.modifier) || 0;
+  const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
+    ? Number(record.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
+    ? Number(record.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
+  const modifierBreakdownHtml = settings.enableSkillSystem
+    ? formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
+    : "";
 
   const distributionBlock = !isTimeout && record.result
     ? buildEventDistributionBlockTemplateEvent(
@@ -2880,6 +4235,8 @@ function buildEventAlreadyRolledCardEvent(
     eventTitleHtml: escapeHtmlEvent(event.title),
     eventIdHtml: escapeHtmlEvent(event.id),
     sourceTextHtml: escapeHtmlEvent(sourceText),
+    targetHtml: escapeHtmlEvent(record.targetLabelUsed || event.targetLabel),
+    modifierBreakdownHtml: escapeHtmlEvent(modifierBreakdownHtml),
     compareHtml: escapeHtmlEvent(record.compareUsed),
     dcText: String(record.dcUsed ?? "N/A"),
     statusText,
@@ -2941,6 +4298,10 @@ function performEventRollByIdEvent(
   } catch (error: any) {
     return `❌ 掷骰失败：${error?.message ?? String(error)}`;
   }
+  const settings = getSettingsEvent();
+  const skillModifierApplied = resolveSkillModifierBySkillNameEvent(event.skill, settings);
+  const adjusted = applySkillModifierToDiceResultEvent(result, skillModifierApplied);
+  result = adjusted.result;
 
   saveLastRoll(result);
   const compareUsed = normalizeCompareOperatorEvent(event.compare) ?? ">=";
@@ -2957,6 +4318,10 @@ function performEventRollByIdEvent(
     success,
     compareUsed,
     dcUsed,
+    skillModifierApplied,
+    baseModifierUsed: adjusted.baseModifierUsed,
+    finalModifierUsed: adjusted.finalModifierUsed,
+    targetLabelUsed: event.targetLabel,
     rolledAt: Date.now(),
     source: "manual_roll",
     timeoutAt: null,
@@ -2998,6 +4363,9 @@ function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
       console.warn(`[骰子插件] AI 自动投骰失败: event=${event.id}`, error);
       continue;
     }
+    const skillModifierApplied = resolveSkillModifierBySkillNameEvent(event.skill, settings);
+    const adjusted = applySkillModifierToDiceResultEvent(result, skillModifierApplied);
+    result = adjusted.result;
 
     const compareUsed = normalizeCompareOperatorEvent(event.compare) ?? ">=";
     const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
@@ -3012,6 +4380,10 @@ function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
       success,
       compareUsed,
       dcUsed,
+      skillModifierApplied,
+      baseModifierUsed: adjusted.baseModifierUsed,
+      finalModifierUsed: adjusted.finalModifierUsed,
+      targetLabelUsed: event.targetLabel,
       rolledAt: Date.now(),
       source: "ai_auto_roll",
       timeoutAt: null,
@@ -3183,14 +4555,16 @@ function buildEventRollHelpMessageEvent(): string {
 }
 
 function buildEventListTextEvent(round: PendingRoundEvent): string {
+  const settings = getSettingsEvent();
   ensureRoundEventTimersSyncedEvent(round);
   const lines: string[] = [];
   lines.push(`当前轮次: ${round.roundId}`);
   lines.push(`事件数量: ${round.events.length}`);
   for (const event of round.events) {
     const state = getEventRuntimeViewStateEvent(round, event);
+    const skillMod = resolveSkillModifierBySkillNameEvent(event.skill, settings);
     lines.push(
-      `- ${event.id}: ${event.title} | ${event.checkDice} | ${event.compare ?? ">="} ${event.dc} | ${event.skill} | rollMode=${event.rollMode ?? "manual"} | timeLimit=${event.timeLimit ?? "none"} | 状态=${state.text}`
+      `- ${event.id}: ${event.title} | target=${event.targetLabel} | ${event.checkDice} | ${event.compare ?? ">="} ${event.dc} | ${event.skill} | skillMod=${skillMod} | rollMode=${event.rollMode ?? "manual"} | timeLimit=${event.timeLimit ?? "none"} | 状态=${state.text}`
     );
   }
   return lines.join("\n");

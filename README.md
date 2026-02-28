@@ -58,3 +58,68 @@
 
 *   **Author**: Shion
 *   **Version**: 1.0.0
+
+---
+
+## Event Target + Skill System (New)
+
+### Event target (rolljson)
+
+`events[i].target` is optional:
+
+```rolljson
+{
+  "type": "dice_events",
+  "version": "1",
+  "events": [
+    {
+      "id": "check_1",
+      "title": "Observe expression",
+      "checkDice": "1d100",
+      "dc": 60,
+      "skill": "Perception",
+      "desc": "You try to read the NPC's expression.",
+      "target": { "type": "supporting", "name": "Suì Qiūshēng" }
+    }
+  ]
+}
+```
+
+`target.type` supports:
+
+- `self`
+- `scene`
+- `supporting`
+- `object`
+- `other`
+
+If missing, plugin falls back by `scope`.
+
+### Skill tab (Preset + Visual Editor)
+
+Settings has a dedicated **Skill** tab with preset management and a visual table editor:
+
+- left pane: preset list (`create` / `switch` / `rename` / `delete`)
+- right pane: skill rows editor (`Skill Name` / `Modifier (Integer)` / `Action`)
+- actions: `Add Skill`, `Save Skill Table`, `Reset Empty`, `Import JSON`, `Export JSON`
+
+Preset behavior:
+
+- single active preset model (only one preset affects runtime at a time)
+- switching preset applies immediately to runtime and rule injection
+- editing rows is draft-only; clicking **Save Skill Table** commits and applies immediately
+- built-in default preset: `通用叙事TRPG（默认）` (locked, non-deletable)
+
+Storage compatibility:
+
+- runtime compatibility field remains `skillTableText` (active preset mirror)
+- preset storage field is `skillPresetStoreText`
+- skill matching still uses normalized key (`trim + lowercase`)
+
+Rule injection:
+
+- when skill system is ON, `[SKILL_SYSTEM]` now injects:
+  - `preset_id`
+  - `preset_name`
+  - `skill_table`
+- when skill system is OFF, no skill section is injected

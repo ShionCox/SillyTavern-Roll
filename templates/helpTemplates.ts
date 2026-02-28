@@ -32,6 +32,11 @@ export function buildEventRollHelpTemplateEvent(): string {
       <code>events[i].outcomes.success</code> / <code>failure</code> / <code>explode</code>.
       If <code>checkDice</code> uses <code>!</code> and explosion is triggered, <code>explode</code> is preferred.
     </div>
+    <div>
+      <strong>event target</strong>:
+      optional <code>events[i].target = { type, name? }</code>, where
+      <code>type</code> is one of <code>self</code>/<code>scene</code>/<code>supporting</code>/<code>object</code>/<code>other</code>.
+    </div>
   </div>`;
 }
 

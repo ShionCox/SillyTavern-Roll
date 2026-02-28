@@ -2,7 +2,9 @@ export interface EventListItemTemplateParamsEvent {
   titleHtml: string;
   eventIdHtml: string;
   descHtml: string;
+  targetHtml: string;
   skillHtml: string;
+  modifierTextHtml: string;
   checkDiceHtml: string;
   compareHtml: string;
   dcText: string;
@@ -31,8 +33,8 @@ export function buildEventRolledBlockTemplateEvent(
 
 export function buildEventRolledPrefixTemplateEvent(isTimeoutAutoFail: boolean): string {
   return isTimeoutAutoFail
-    ? "<span style='color:#ff4d4f;font-weight:bold;'>[×]</span>"
-    : "<span style='color:#52c41a;font-weight:bold;'>[✓]</span>";
+    ? "<span style='color:#ff4d4f;font-weight:bold;'>[X]</span>"
+    : "<span style='color:#52c41a;font-weight:bold;'>[OK]</span>";
 }
 
 export interface EventRollButtonTemplateParamsEvent {
@@ -54,6 +56,9 @@ export function buildEventRollButtonTemplateEvent(
 export function buildEventListItemTemplateEvent(
   params: EventListItemTemplateParamsEvent
 ): string {
+  const modifierBadgeHtml = params.modifierTextHtml
+    ? `<span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">MOD <span style="color:#ffd987;">${params.modifierTextHtml}</span></span>`
+    : "";
   return `
       <li style="position:relative;list-style:none;margin-bottom:16px;border:1px solid rgba(197,160,89,0.3);border-left:3px solid #c5a059;padding:14px;background:linear-gradient(135deg, rgba(30,20,18,0.8), rgba(15,10,10,0.9));box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
@@ -72,10 +77,12 @@ export function buildEventListItemTemplateEvent(
         ${params.outcomePreviewHtml}
 
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;justify-content:center;text-align:center;">
+          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">目标 <span style="color:#9ad1ff;">${params.targetHtml}</span></span>
           <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">技能 <span style="color:#fff;">${params.skillHtml}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">骰式 <span style="color:#ffdfa3;">${params.checkDiceHtml}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">判定 <span style="color:#ffbbbb;">${params.compareHtml} ${params.dcText}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">时限 <span style="color:#a0d9a0;">${params.timeLimitHtml}</span></span>
+          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">骰子 <span style="color:#ffdfa3;">${params.checkDiceHtml}</span></span>
+          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">检定 <span style="color:#ffbbbb;">${params.compareHtml} ${params.dcText}</span></span>
+          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">时间 <span style="color:#a0d9a0;">${params.timeLimitHtml}</span></span>
+          ${modifierBadgeHtml}
         </div>
 
         <div data-dice-countdown="1" data-round-id="${params.roundIdAttr}" data-event-id="${params.eventIdAttr}" data-deadline-at="${params.deadlineAttr}" style="display:inline-block;padding:4px 10px;font-size:11px;font-family:monospace;border:${params.runtimeBorder};background:${params.runtimeBackground};color:${params.runtimeColor};letter-spacing:1px;margin-bottom:4px;">
@@ -98,8 +105,8 @@ export function buildEventListCardTemplateEvent(
   return `
   <div style="border:1px solid #8c7b60;background:linear-gradient(145deg,#1c1412 0%,#0d0806 100%);padding:16px;color:#d1c5a5;box-shadow:0 8px 24px rgba(0,0,0,0.4), inset 0 0 30px rgba(0,0,0,0.6);font-family:sans-serif;">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;border-bottom:1px solid #4a3b2c;padding-bottom:10px;">
-      <strong style="color:#e8dcb5;font-size:16px;font-family:'Georgia', serif;letter-spacing:2px;">❖ 本轮可用事件 ❖</strong>
-      <span style="font-size:11px;color:#6b5a45;font-family:monospace;">ROUND: ${roundIdHtml}</span>
+      <strong style="color:#e8dcb5;font-size:16px;font-family:'Georgia', serif;letter-spacing:2px;">◆ 当前事件 ◆</strong>
+      <span style="font-size:11px;color:#6b5a45;font-family:monospace;">轮次ID: ${roundIdHtml}</span>
     </div>
     <ul style="padding:0;margin:0;">${itemsHtml}</ul>
   </div>`;
@@ -110,9 +117,11 @@ export interface EventRollResultCardTemplateParamsEvent {
   titleHtml: string;
   eventIdHtml: string;
   sourceHtml: string;
+  targetHtml: string;
   skillHtml: string;
   diceExprHtml: string;
   rollsSummaryHtml: string;
+  modifierBreakdownHtml: string;
   compareHtml: string;
   dcText: string;
   statusText: string;
@@ -127,10 +136,14 @@ export interface EventRollResultCardTemplateParamsEvent {
 export function buildEventRollResultCardTemplateEvent(
   params: EventRollResultCardTemplateParamsEvent
 ): string {
+  const modifierRowHtml = params.modifierBreakdownHtml
+    ? `<div style="color:#8c7b60;text-align:right;">MOD</div>
+       <div style="font-family:monospace;color:#ffd987;">${params.modifierBreakdownHtml}</div>`
+    : "";
   return `
   <div style="border:1px solid #8c7b60;background:linear-gradient(145deg,#1c1412 0%,#0d0806 100%);padding:16px;color:#d1c5a5;box-shadow:0 8px 24px rgba(0,0,0,0.4), inset 0 0 30px rgba(0,0,0,0.6);">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;border-bottom:1px solid #4a3b2c;padding-bottom:10px;">
-      <strong style="color:#e8dcb5;font-size:15px;font-family:'Georgia', serif;letter-spacing:1px;">❖ 检定结算报告 ❖</strong>
+      <strong style="color:#e8dcb5;font-size:15px;font-family:'Georgia', serif;letter-spacing:1px;">◆ 投掷结果 ◆</strong>
       <span style="font-size:11px;color:#6b5a45;font-family:monospace;">${params.rollIdHtml}</span>
     </div>
 
@@ -139,31 +152,36 @@ export function buildEventRollResultCardTemplateEvent(
     </div>
 
     <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px;line-height:1.4;opacity:0.9;background:rgba(0,0,0,0.3);padding:10px;border:1px solid rgba(197,160,89,0.15);">
-      <div style="color:#8c7b60;text-align:right;">事件 ID</div>
+      <div style="color:#8c7b60;text-align:right;">事件ID</div>
       <div style="font-family:monospace;">${params.eventIdHtml}</div>
 
-      <div style="color:#8c7b60;text-align:right;">判定来源</div>
+      <div style="color:#8c7b60;text-align:right;">来源</div>
       <div>${params.sourceHtml}</div>
 
-      <div style="color:#8c7b60;text-align:right;">检定技能</div>
+      <div style="color:#8c7b60;text-align:right;">目标</div>
+      <div style="color:#9ad1ff;">${params.targetHtml}</div>
+
+      <div style="color:#8c7b60;text-align:right;">技能</div>
       <div style="color:#fff;">${params.skillHtml}</div>
 
-      <div style="color:#8c7b60;text-align:right;">检定方式</div>
+      <div style="color:#8c7b60;text-align:right;">骰子</div>
       <div style="font-family:monospace;color:#ffdfa3;">${params.diceExprHtml}</div>
 
-      <div style="color:#8c7b60;text-align:right;">原始点数</div>
+      <div style="color:#8c7b60;text-align:right;">掷骰结果</div>
       <div style="font-family:monospace;">${params.rollsSummaryHtml}</div>
+
+      ${modifierRowHtml}
     </div>
 
     <div style="margin-top:16px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;background:linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.1));padding:12px;border-left:3px solid ${params.statusColor};">
       <div style="justify-self:start;">
-        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">结果摘要</div>
+        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">结果</div>
       </div>
       <div style="justify-self:center;display:flex;align-items:center;justify-content:center;">
         ${params.diceVisualBlockHtml}
       </div>
       <div style="justify-self:end;text-align:right;">
-        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">系统判定</div>
+        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">系统检查</div>
         <div style="font-size:13px;font-family:monospace;margin-bottom:2px;">条件: ${params.compareHtml} ${params.dcText}</div>
         <div style="font-weight:bold;font-size:16px;color:${params.statusColor};letter-spacing:1px;">[ ${params.statusText} ]</div>
       </div>
@@ -175,7 +193,7 @@ export function buildEventRollResultCardTemplateEvent(
     </div>
 
     <div style="margin-top:12px;font-size:11px;color:#6b5a45;text-align:right;font-family:monospace;">
-      TIME LIMIT: ${params.timeLimitHtml}
+      时间限制: ${params.timeLimitHtml}
     </div>
   </div>`;
 }
@@ -193,6 +211,8 @@ export interface EventAlreadyRolledCardTemplateParamsEvent {
   eventTitleHtml: string;
   eventIdHtml: string;
   sourceTextHtml: string;
+  targetHtml: string;
+  modifierBreakdownHtml: string;
   compareHtml: string;
   dcText: string;
   statusText: string;
@@ -207,6 +227,9 @@ export interface EventAlreadyRolledCardTemplateParamsEvent {
 export function buildEventAlreadyRolledCardTemplateEvent(
   params: EventAlreadyRolledCardTemplateParamsEvent
 ): string {
+  const modifierLineHtml = params.modifierBreakdownHtml
+    ? `<div><span style="color:#8c7b60;">MOD:</span> <code style="font-size:11px;color:#ffdfa3;">${params.modifierBreakdownHtml}</code></div>`
+    : "";
   return `
   <div style="border:1px solid #5a4b3c;background:linear-gradient(135deg,#241c18 0%,#171210 100%);padding:14px;color:#b3a58b;box-shadow:inset 0 0 20px rgba(0,0,0,0.5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px dashed #4a3b2c;padding-bottom:8px;">
@@ -215,11 +238,13 @@ export function buildEventAlreadyRolledCardTemplateEvent(
     </div>
 
     <div style="font-size:13px;line-height:1.6;display:flex;flex-direction:column;gap:4px;">
-      <div><span style="color:#8c7b60;">目标事件：</span> <strong style="color:#d1c5a5;">${params.eventTitleHtml}</strong> <code style="font-size:11px;color:#6b5a45;">(${params.eventIdHtml})</code></div>
-      <div><span style="color:#8c7b60;">判定来源：</span> ${params.sourceTextHtml}</div>
+      <div><span style="color:#8c7b60;">Event:</span> <strong style="color:#d1c5a5;">${params.eventTitleHtml}</strong> <code style="font-size:11px;color:#6b5a45;">(${params.eventIdHtml})</code></div>
+      <div><span style="color:#8c7b60;">Source:</span> ${params.sourceTextHtml}</div>
+      <div><span style="color:#8c7b60;">Target:</span> ${params.targetHtml}</div>
+      ${modifierLineHtml}
 
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(0,0,0,0.3);">
-        <span style="color:#8c7b60;">判定条件：</span>
+        <span style="color:#8c7b60;">条件:</span>
         <span style="font-size:12px;color:#d1c5a5;font-family:monospace;">${params.compareHtml} ${params.dcText}</span>
         <span style="margin-left:auto;color:${params.statusColor};font-weight:bold;border:1px solid ${params.statusColor};padding:2px 6px;font-size:11px;border-radius:2px;">
           ${params.statusText}
@@ -243,11 +268,11 @@ export function buildEventDistributionBlockTemplateEvent(
 ): string {
   return `
       <div style="font-size:11px;color:#6b5a45;margin-top:6px;text-align:center;background:rgba(0,0,0,0.3);padding:4px;border-radius:4px;">
-        <span style="color:#8c7b60;">点数分布：</span> [${rollsHtml}] <span style="color:#8c7b60;margin:0 4px;">|</span> <span style="color:#8c7b60;">修正</span> ${modifierHtml}
+        <span style="color:#8c7b60;">Rolls:</span> [${rollsHtml}] <span style="color:#8c7b60;margin:0 4px;">|</span> <span style="color:#8c7b60;">Mod</span> ${modifierHtml}
       </div>
       `;
 }
 
 export function buildEventTimeoutAtBlockTemplateEvent(timeoutIsoHtml: string): string {
-  return `<div style="font-size:11px;color:#8c7b60;margin-top:6px;font-family:monospace;text-align:right;">截止于 ${timeoutIsoHtml}</div>`;
+  return `<div style="font-size:11px;color:#8c7b60;margin-top:6px;font-family:monospace;text-align:right;">Timed out at ${timeoutIsoHtml}</div>`;
 }
