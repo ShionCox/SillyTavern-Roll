@@ -1,0 +1,36 @@
+export interface SettingsCardTemplateIdsEvent {
+  cardId: string;
+  drawerToggleId: string;
+  drawerContentId: string;
+  drawerIconId: string;
+  badgeId: string;
+  badgeText: string;
+  authorText: string;
+  emailText: string;
+  githubText: string;
+  githubUrl: string;
+  searchId: string;
+  tabMainId: string;
+  tabRuleId: string;
+  tabAboutId: string;
+  panelMainId: string;
+  panelRuleId: string;
+  panelAboutId: string;
+  enabledId: string;
+  ruleId: string;
+  aiRollModeId: string;
+  explodingEnabledId: string;
+  summaryDetailId: string;
+  summaryRoundsId: string;
+  scopeId: string;
+  outcomeBranchesId: string;
+  explodeOutcomeId: string;
+  includeOutcomeSummaryId: string;
+  listOutcomePreviewId: string;
+  timeLimitEnabledId: string;
+  timeLimitMinId: string;
+  timeLimitRowId: string;
+  ruleSaveId: string;
+  ruleResetId: string;
+  ruleTextId: string;
+}

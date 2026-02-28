@@ -3,6 +3,8 @@
     "target": "ES2020",
     "module": "ES2020",
     "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "strict": false,
     "allowJs": true,
     "noEmitOnError": false,

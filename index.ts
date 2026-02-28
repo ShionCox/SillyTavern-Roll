@@ -1,4 +1,33 @@
 ﻿/// <reference path="./global.d.ts" />
+import manifestJson from "./manifest.json";
+import { buildSettingsCardHtmlTemplateEvent } from "./templates/settingsCardHtmlTemplate";
+import { buildSettingsCardStylesTemplateEvent } from "./templates/settingsCardStylesTemplate";
+import {
+  buildAlreadyRolledDiceVisualTemplateEvent,
+  buildDiceSvgTemplateEvent,
+  buildResultMessageTemplateEvent,
+  buildRollingSvgTemplateEvent,
+} from "./templates/diceResultTemplates";
+import {
+  buildDebugTemplateEvent,
+  buildEventRollHelpTemplateEvent,
+  buildPreBlockTemplateEvent,
+  buildRollCommandHelpTemplateEvent,
+} from "./templates/helpTemplates";
+import {
+  buildEventAlreadyRolledCardTemplateEvent,
+  buildEventDistributionBlockTemplateEvent,
+  buildEventListCardTemplateEvent,
+  buildEventListItemTemplateEvent,
+  buildEventRolledPrefixTemplateEvent,
+  buildEventRollButtonTemplateEvent,
+  buildEventRolledBlockTemplateEvent,
+  buildEventRollResultCardTemplateEvent,
+  buildRollsSummaryTemplateEvent,
+  buildEventTimeoutAtBlockTemplateEvent,
+} from "./templates/eventCardTemplates";
+import type { SettingsCardTemplateIdsEvent } from "./templates/settingsCardTemplateTypes";
+
 interface DiceResult {
   expr: string; // 原始表达式，例如 "3d6+2"
   count: number; // 骰子数量 N
@@ -16,310 +45,21 @@ function formatModifier(mod: number): string {
   return mod > 0 ? `+${mod}` : `${mod}`;
 }
 
-function getDiceSvg(value: number, sides: number, color: string): string {
-  const size = 48;
-  const stroke = 3;
-  const dotR = 4;
-
-  if (sides === 6) {
-    // D6: 画点
-    const dotsMap: Record<number, number[][]> = {
-      1: [[24, 24]],
-      2: [[14, 14], [34, 34]],
-      3: [[14, 14], [24, 24], [34, 34]],
-      4: [[14, 14], [14, 34], [34, 14], [34, 34]],
-      5: [[14, 14], [14, 34], [24, 24], [34, 14], [34, 34]],
-      6: [[14, 14], [14, 24], [14, 34], [34, 14], [34, 24], [34, 34]]
-    };
-    const dots = dotsMap[value] || [];
-    const circles = dots.map(([cx, cy]) =>
-      `<circle cx="${cx}" cy="${cy}" r="${dotR}" fill="${color}" />`
-    ).join('');
-
-    return `
-      <svg width="${size}" height="${size}" viewBox="0 0 48 48" style="display:inline-block; vertical-align: middle;">
-          <rect x="4" y="4" width="40" height="40" rx="8" ry="8" fill="none" stroke="${color}" stroke-width="${stroke}" />
-          ${circles}
-      </svg>`;
-  } else {
-    // D20/其他: 画一个多边形（六边形模拟）并显示数值
-    return `
-      <svg width="${size}" height="${size}" viewBox="0 0 48 48" style="display:inline-block; vertical-align: middle;">
-          <path d="M24 4 L43 14 L43 34 L24 44 L5 34 L5 14 Z" fill="none" stroke="${color}" stroke-width="${stroke}" />
-          <path d="M24 4 L24 24 M24 24 L43 34 M24 24 L5 34" stroke="${color}" stroke-width="1.5" opacity="0.6"/>
-          <text x="24" y="33" font-size="18" text-anchor="middle" fill="${color}" font-weight="bold" style="font-family: sans-serif;">${value}</text>
-      </svg>`;
-  }
+function getDiceSvg(
+  value: number,
+  sides: number,
+  color: string,
+  size?: number
+): string {
+  return buildDiceSvgTemplateEvent(value, sides, color, size);
 }
 
-function getRollingSvg(color: string): string {
-  // 3D 立方体 CSS 结构，不使用 SVG
-  return `
-    <div class="cube-scene" style="perspective: 600px; width: 40px; height: 40px;">
-      <div class="cube" style="
-        width: 100%; height: 100%; position: relative; transform-style: preserve-3d;
-        /* 动画在 CSS 中定义 */
-      ">
-        <div class="cube-face front"  style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateY(  0deg) translateZ(20px);">?</div>
-        <div class="cube-face back"   style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateY(180deg) translateZ(20px);">?</div>
-        <div class="cube-face right"  style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateY( 90deg) translateZ(20px);">?</div>
-        <div class="cube-face left"   style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateY(-90deg) translateZ(20px);">?</div>
-        <div class="cube-face top"    style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateX( 90deg) translateZ(20px);">?</div>
-        <div class="cube-face bottom" style="position: absolute; width: 40px; height: 40px; border: 2px solid ${color}; background: rgba(43, 29, 29, 0.8); color: ${color}; line-height: 40px; text-align: center; font-weight: bold; font-size: 20px; transform: rotateX(-90deg) translateZ(20px);">?</div>
-      </div>
-    </div>
-  `;
+function getRollingSvg(color: string, size?: number): string {
+  return buildRollingSvgTemplateEvent(color, size);
 }
 
 function buildResultMessage(result: DiceResult): string {
-  const modStr = formatModifier(result.modifier);
-  const rollsStr = result.rolls.join(", ");
-  const hasModifier = result.modifier !== 0;
-  const uniqueId = "d" + Math.random().toString(36).substr(2, 9);
-
-  // RPG 风格配色
-  const rpgColors = {
-    border: '#c5a059', // 古铜金
-    bg: 'linear-gradient(135deg, #2b1d1d 0%, #1a1010 100%)', // 深红褐色背景
-    headerBg: 'rgba(0, 0, 0, 0.4)',
-    textMain: '#e8dcb5', // 羊皮纸白
-    textHighlight: '#ffdb78', // 亮金色
-    critSuccess: '#4caf50', // 大成功绿
-    critFail: '#f44336', // 大失败红
-  };
-
-  // 判断大成功/大失败 (通用逻辑：单骰子时，1为大失败，最大值为大成功)
-  let critType = 'normal';
-  let critText = '';
-  let resultColor = rpgColors.textHighlight;
-  let resultGlow = '0 2px 4px rgba(0,0,0,0.5)';
-  let cardBg = rpgColors.bg;
-  let cardBorder = rpgColors.border;
-
-  // 仅当只有一个骰子时判断大成功/大失败
-  if (result.count === 1) {
-    const val = result.rolls[0];
-    const maxVal = result.sides;
-
-    if (val === maxVal) {
-      critType = 'success';
-      critText = '大成功!';
-      resultColor = rpgColors.critSuccess;
-      resultGlow = '0 0 15px rgba(76, 175, 80, 0.8)';
-      cardBg = 'linear-gradient(135deg, #1b3320 0%, #0d1a10 100%)';
-      cardBorder = rpgColors.critSuccess;
-    } else if (val === 1) {
-      critType = 'fail';
-      critText = '大失败!';
-      resultColor = rpgColors.critFail;
-      resultGlow = '0 0 15px rgba(244, 67, 54, 0.8)';
-      cardBg = 'linear-gradient(135deg, #331b1b 0%, #1a0d0d 100%)';
-      cardBorder = rpgColors.critFail;
-    }
-  }
-
-  const showDiceSvgs = result.rolls.length <= 5;
-  let diceVisuals = "";
-  
-  if (showDiceSvgs) {
-    diceVisuals = result.rolls.map(r => getDiceSvg(r, result.sides, resultColor)).join(" ");
-  } else {
-    diceVisuals = getDiceSvg(0, result.sides, resultColor);
-  }
-
-  const rollingVisual = getRollingSvg(rpgColors.textHighlight);
-  const detailParts: string[] = [];
-  if (result.rolls.length) {
-    detailParts.push(`骰子: [${rollsStr}]`);
-  }
-  if (hasModifier) {
-    detailParts.push(`修正值: ${modStr}`);
-  }
-  if (result.exploding) {
-    detailParts.push(
-      result.explosionTriggered ? '🔥 爆骰触发' : '🔥 爆骰待触发'
-    );
-  }
-  const detailText = detailParts.join(' | ');
-
-  return `
-  <style>
-    @keyframes spin-3d-${uniqueId} {
-      0% { transform: rotateX(0deg) rotateY(0deg); }
-      100% { transform: rotateX(360deg) rotateY(360deg); }
-    }
-    @keyframes fade-out-${uniqueId} {
-      0% { opacity: 1; }
-      90% { opacity: 0; }
-      100% { opacity: 0; display: none; }
-    }
-    @keyframes fade-in-${uniqueId} {
-      0% { opacity: 0; transform: scale(0.8); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-    @keyframes pulse-crit-${uniqueId} {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
-    @keyframes shake-crit-${uniqueId} {
-      0% { transform: translate(1px, 1px) rotate(0deg); }
-      10% { transform: translate(-1px, -2px) rotate(-1deg); }
-      20% { transform: translate(-3px, 0px) rotate(1deg); }
-      30% { transform: translate(3px, 2px) rotate(0deg); }
-      40% { transform: translate(1px, -1px) rotate(1deg); }
-      50% { transform: translate(-1px, 2px) rotate(-1deg); }
-      60% { transform: translate(-3px, 1px) rotate(0deg); }
-      70% { transform: translate(3px, 1px) rotate(-1deg); }
-      80% { transform: translate(-1px, -1px) rotate(1deg); }
-      90% { transform: translate(1px, 2px) rotate(0deg); }
-      100% { transform: translate(1px, -2px) rotate(-1deg); }
-    }
-    
-    .dice-wrapper-${uniqueId} {
-      position: relative;
-      min-height: 100px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .dice-rolling-${uniqueId} {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      animation: fade-out-${uniqueId} 0.2s forwards 1.2s;
-      z-index: 10;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    
-    .dice-rolling-${uniqueId} .cube {
-      animation: spin-3d-${uniqueId} 1.5s linear infinite;
-    }
-
-    .dice-result-${uniqueId} {
-      opacity: 0;
-      animation: fade-in-${uniqueId} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 1.3s;
-      text-align: center;
-      width: 100%;
-    }
-
-    .crit-success-${uniqueId} {
-      animation: pulse-crit-${uniqueId} 1s infinite;
-      color: ${rpgColors.critSuccess};
-      font-weight: bold;
-      margin-bottom: 8px;
-      text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
-    }
-
-    .crit-fail-${uniqueId} {
-      animation: shake-crit-${uniqueId} 0.5s;
-      color: ${rpgColors.critFail};
-      font-weight: bold;
-      margin-bottom: 8px;
-      text-shadow: 0 0 10px rgba(244, 67, 54, 0.5);
-    }
-
-    .explosion-note-${uniqueId} {
-      color: #ffae42;
-      font-weight: bold;
-      margin-bottom: 8px;
-      letter-spacing: 1px;
-      text-shadow: 0 0 12px rgba(255, 174, 66, 0.6);
-    }
-  </style>
-  
-  <div style="
-    border: 2px solid ${cardBorder};
-    border-radius: 4px;
-    background: ${cardBg};
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(0,0,0,0.6);
-    font-family: 'Georgia', 'Times New Roman', serif;
-    overflow: hidden;
-    margin: 8px 0;
-    width: 100%;
-    box-sizing: border-box;
-    color: ${rpgColors.textMain};
-    position: relative;
-  ">
-    <!-- 装饰角标 -->
-    <div style="position: absolute; top: 0; left: 0; width: 6px; height: 6px; border-top: 2px solid ${rpgColors.border}; border-left: 2px solid ${rpgColors.border};"></div>
-    <div style="position: absolute; top: 0; right: 0; width: 6px; height: 6px; border-top: 2px solid ${rpgColors.border}; border-right: 2px solid ${rpgColors.border};"></div>
-    <div style="position: absolute; bottom: 0; left: 0; width: 6px; height: 6px; border-bottom: 2px solid ${rpgColors.border}; border-left: 2px solid ${rpgColors.border};"></div>
-    <div style="position: absolute; bottom: 0; right: 0; width: 6px; height: 6px; border-bottom: 2px solid ${rpgColors.border}; border-right: 2px solid ${rpgColors.border};"></div>
-
-    <!-- Header -->
-    <div style="
-        background-color: ${rpgColors.headerBg};
-        padding: 8px 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid rgba(197, 160, 89, 0.3);
-        font-size: 0.9em;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-    ">
-        <span style="display: flex; align-items: center; gap: 8px; color: ${rpgColors.textHighlight};">
-            <span style="font-size: 1.2em;">🎲</span> <span style="font-weight: bold;">骰子系统</span>
-        </span>
-        <span style="
-            font-family: monospace;
-            color: ${rpgColors.textMain};
-            background: rgba(0,0,0,0.3);
-            padding: 2px 8px;
-            border: 1px solid rgba(197, 160, 89, 0.2);
-            border-radius: 2px;
-            font-size: 0.9em;
-        ">${result.expr}</span>
-    </div>
-
-    <!-- Body -->
-    <div class="dice-wrapper-${uniqueId}">
-        
-        <!-- 动画层：Rolling (3D Cube) -->
-        <div class="dice-rolling-${uniqueId}">
-            ${rollingVisual}
-        </div>
-
-        <!-- 结果层：Result -->
-        <div class="dice-result-${uniqueId}">
-            ${critText ? `<div class="${critType === 'success' ? `crit-success-${uniqueId}` : `crit-fail-${uniqueId}`}">${critText}</div>` : ''}
-          ${result.exploding ? `<div class="explosion-note-${uniqueId}">${result.explosionTriggered ? '🔥 连锁爆骰！' : '🔥 爆骰已开启'}</div>` : ''}
-            
-            <!-- 骰子 SVG 展示 -->
-            <div style="margin-bottom: 12px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                ${diceVisuals}
-            </div>
-
-            <!-- 数值展示 -->
-            <div style="
-                font-size: 2.5em;
-                font-weight: bold;
-                color: ${resultColor};
-                text-shadow: ${resultGlow};
-                line-height: 1;
-            ">
-                ${result.total}
-            </div>
-            
-            <div style="
-                font-size: 0.9em;
-                color: ${rpgColors.textMain};
-                margin-top: 8px;
-                opacity: 0.8;
-            ">
-              ${detailText}
-            </div>
-        </div>
-
-    </div>
-  </div>
-  `;
+  return buildResultMessageTemplateEvent(result);
 }
 
 interface STContext {
@@ -458,15 +198,17 @@ function pushRollWithExplosion(
 
 function rollBaseExpression(exprRaw: string): DiceResult {
   const { count, sides, modifier, explode } = parseDiceExpression(exprRaw);
+  const settings = getSettingsEvent();
+  const effectiveExplode = explode && settings.enableExplodingDice;
   const rolls: number[] = [];
 
   for (let i = 0; i < count; i++) {
-    pushRollWithExplosion(sides, explode, rolls);
+    pushRollWithExplosion(sides, effectiveExplode, rolls);
   }
 
   const rawTotal = rolls.reduce((a, b) => a + b, 0);
   const total = rawTotal + modifier;
-  const explosionTriggered = explode && rolls.length > count;
+  const explosionTriggered = effectiveExplode && rolls.length > count;
 
   return {
     expr: exprRaw,
@@ -476,7 +218,7 @@ function rollBaseExpression(exprRaw: string): DiceResult {
     rolls,
     rawTotal,
     total,
-    exploding: explode,
+    exploding: effectiveExplode,
     explosionTriggered,
   };
 }
@@ -549,84 +291,93 @@ function saveLastRoll(result: DiceResult): void {
   saveMetadata();
 }
 
-// {{lastRollTotal}}
-registerMacro("lastRollTotal", () => {
-  const meta = getDiceMeta();
-  if (meta.lastTotal == null) {
-    return "尚未掷骰，请先使用 /roll";
-  }
-  return String(meta.lastTotal);
-});
+function registerBaseMacrosAndCommandsEvent(): void {
+  const globalRef = globalThis as any;
 
-// {{lastRoll}}
-registerMacro("lastRoll", () => {
-  const meta = getDiceMeta();
-  if (!meta.last) {
-    return "尚未掷骰，请先使用 /roll";
-  }
-  return JSON.stringify(meta.last, null, 2);
-});
-
-// ===== 注册 /roll 命令 =====
-SlashCommandParser.addCommandObject(
-  SlashCommand.fromProps({
-    name: "roll",
-    aliases: ["dice"],
-    returns: "通用骰子：支持 NdM+X，如 3d6+2、1d20",
-
-    namedArgumentList: [],
-
-    unnamedArgumentList: [
-      SlashCommandArgument.fromProps({
-        description: "骰子表达式（例如 1d20、3d6+2）。留空则等于 1d20。",
-        typeList: ARGUMENT_TYPE.STRING,
-        isRequired: false,
-      }),
-    ],
-
-    helpString: `
-      <div>
-        通用骰子指令，支持 <code>NdM+X</code> 形式，例如：
-      </div>
-      <ul>
-        <li><code>/roll</code> （等同于 <code>/roll 1d20</code>）</li>
-        <li><code>/roll 1d20</code></li>
-        <li><code>/roll 3d6+2</code></li>
-        <li><code>/roll 2d10-1</code></li>
-        <li><code>/roll 1d6!+2</code> （<code>!</code> 代表爆骰，掷出最大值会继续追加）</li>
-      </ul>
-      <div>
-        结果会记录到 <code>chatMetadata.lastRoll</code>，并可通过
-        <code>{{lastRoll}}</code>、<code>{{lastRollTotal}}</code> 宏访问。
-      </div>
-    `,
-
-    callback: (namedArgs: Record<string, any>, unnamedArgs: any) => {
-      try {
-        const exprRaw = (unnamedArgs ?? "").toString().trim();
-        const expr = exprRaw || "1d20";
-
-        const result = rollExpression(expr);
-        saveLastRoll(result);
-
-        const msg = buildResultMessage(result);
-        const fallback = pushToChat(msg);
-
-        return fallback ?? "";
-      } catch (e: any) {
-        const errMsg = `❌ 掷骰出错：${e?.message ?? String(e)}`;
-        const fallback = pushToChat(errMsg);
-        return fallback ?? "";
+  if (!globalRef.__stRollBaseMacrosRegisteredEvent) {
+    // {{lastRollTotal}}
+    registerMacro("lastRollTotal", () => {
+      const meta = getDiceMeta();
+      if (meta.lastTotal == null) {
+        return "尚未掷骰，请先使用 /roll";
       }
-    },
-  })
-);
+      return String(meta.lastTotal);
+    });
+
+    // {{lastRoll}}
+    registerMacro("lastRoll", () => {
+      const meta = getDiceMeta();
+      if (!meta.last) {
+        return "尚未掷骰，请先使用 /roll";
+      }
+      return JSON.stringify(meta.last, null, 2);
+    });
+    globalRef.__stRollBaseMacrosRegisteredEvent = true;
+  }
+
+  if (globalRef.__stRollBaseCommandRegisteredEvent) return;
+  if (!SlashCommandParser || !SlashCommand || !SlashCommandArgument || !ARGUMENT_TYPE) {
+    return;
+  }
+
+  // ===== 注册 /roll 命令 =====
+  SlashCommandParser.addCommandObject(
+    SlashCommand.fromProps({
+      name: "roll",
+      aliases: ["dice"],
+      returns: "通用骰子：支持 NdM+X，如 3d6+2、1d20",
+
+      namedArgumentList: [],
+
+      unnamedArgumentList: [
+        SlashCommandArgument.fromProps({
+          description: "骰子表达式（例如 1d20、3d6+2）。留空则等于 1d20。",
+          typeList: ARGUMENT_TYPE.STRING,
+          isRequired: false,
+        }),
+      ],
+
+      helpString: buildRollCommandHelpTemplateEvent(),
+
+      callback: (_namedArgs: Record<string, any>, unnamedArgs: any) => {
+        try {
+          const exprRaw = (unnamedArgs ?? "").toString().trim();
+          const expr = exprRaw || "1d20";
+
+          const result = rollExpression(expr);
+          saveLastRoll(result);
+
+          const msg = buildResultMessage(result);
+          const fallback = pushToChat(msg);
+
+          return fallback ?? "";
+        } catch (e: any) {
+          const errMsg = `❌ 掷骰出错：${e?.message ?? String(e)}`;
+          const fallback = pushToChat(errMsg);
+          return fallback ?? "";
+        }
+      },
+    })
+  );
+
+  globalRef.__stRollBaseCommandRegisteredEvent = true;
+}
 
 // ===== Event: 事件驱动骰子系统 =====
 type CompareOperatorEvent = ">=" | ">" | "<=" | "<";
 type EventApplyScopeSettingEvent = "protagonist_only" | "all";
 type EventScopeTagEvent = "protagonist" | "all" | "character";
-type EventRollSourceEvent = "manual_roll" | "timeout_auto_fail";
+type EventRollModeEvent = "auto" | "manual";
+type EventRollSourceEvent = "manual_roll" | "ai_auto_roll" | "timeout_auto_fail";
+type SummaryDetailModeEvent = "minimal" | "balanced" | "detailed";
+type SummaryEventStatusEvent = "pending" | "done" | "timeout";
+type EventOutcomeKindEvent = "success" | "failure" | "explode" | "none";
+
+interface EventOutcomesEvent {
+  success?: string;
+  failure?: string;
+  explode?: string;
+}
 
 interface EventTimerStateEvent {
   offeredAt: number;
@@ -637,7 +388,15 @@ interface EventTimerStateEvent {
 interface DicePluginSettingsEvent {
   enabled: boolean;
   autoSendRuleToAI: boolean;
+  enableAiRollMode: boolean;
+  enableExplodingDice: boolean;
+  summaryDetailMode: SummaryDetailModeEvent;
+  summaryHistoryRounds: number;
   eventApplyScope: EventApplyScopeSettingEvent;
+  enableOutcomeBranches: boolean;
+  enableExplodeOutcomeBranch: boolean;
+  includeOutcomeInSummary: boolean;
+  showOutcomePreviewInListCard: boolean;
   enableTimeLimit: boolean;
   minTimeLimitSeconds: number;
   ruleText: string;
@@ -650,12 +409,14 @@ interface DiceEventSpecEvent {
   dc: number;
   compare?: CompareOperatorEvent;
   scope?: EventScopeTagEvent;
+  rollMode?: EventRollModeEvent;
   skill: string;
   timeLimit?: string;
   offeredAt?: number;
   deadlineAt?: number | null;
   timeLimitMs?: number | null;
   desc: string;
+  outcomes?: EventOutcomesEvent;
 }
 
 interface EventRollRecordEvent {
@@ -675,7 +436,7 @@ interface EventRollRecordEvent {
 
 interface PendingRoundEvent {
   roundId: string;
-  status: "open" | "sealed";
+  status: "open";
   events: DiceEventSpecEvent[];
   rolls: EventRollRecordEvent[];
   eventTimers: Record<string, EventTimerStateEvent>;
@@ -689,9 +450,38 @@ interface OutboundSummaryCacheEvent {
   summaryText: string;
 }
 
+interface RoundSummaryEventItemEvent {
+  id: string;
+  title: string;
+  desc: string;
+  skill: string;
+  checkDice: string;
+  compare: CompareOperatorEvent;
+  dc: number;
+  rollMode: EventRollModeEvent;
+  timeLimit: string;
+  status: SummaryEventStatusEvent;
+  resultSource: EventRollSourceEvent | null;
+  total: number | null;
+  success: boolean | null;
+  outcomeKind: EventOutcomeKindEvent;
+  outcomeText: string;
+  explosionTriggered: boolean;
+}
+
+interface RoundSummarySnapshotEvent {
+  roundId: string;
+  openedAt: number;
+  closedAt: number;
+  eventsCount: number;
+  rolledCount: number;
+  events: RoundSummaryEventItemEvent[];
+}
+
 interface DiceMetaEvent {
   pendingRound?: PendingRoundEvent;
   outboundSummary?: OutboundSummaryCacheEvent;
+  summaryHistory?: RoundSummarySnapshotEvent[];
   lastPromptUserMsgId?: string;
   lastProcessedAssistantMsgId?: string;
 }
@@ -713,36 +503,108 @@ interface TavernMessageEvent {
 
 const MODULE_NAME_Event = "SillyTavern-Roll";
 const SETTINGS_CARD_ID_Event = "st-roll-settings-Event-card";
+const SETTINGS_STYLE_ID_Event = "st-roll-settings-Event-style";
+const SETTINGS_BADGE_ID_Event = "st-roll-settings-Event-badge";
 const SETTINGS_ENABLED_ID_Event = "st-roll-settings-Event-enabled";
 const SETTINGS_RULE_ID_Event = "st-roll-settings-Event-auto-rule";
+const SETTINGS_AI_ROLL_MODE_ID_Event = "st-roll-settings-Event-ai-roll-mode";
+const SETTINGS_EXPLODING_ENABLED_ID_Event = "st-roll-settings-Event-exploding-enabled";
+const SETTINGS_SUMMARY_DETAIL_ID_Event = "st-roll-settings-Event-summary-detail";
+const SETTINGS_SUMMARY_ROUNDS_ID_Event = "st-roll-settings-Event-summary-rounds";
 const SETTINGS_SCOPE_ID_Event = "st-roll-settings-Event-apply-scope";
+const SETTINGS_OUTCOME_BRANCHES_ID_Event = "st-roll-settings-Event-outcome-branches";
+const SETTINGS_EXPLODE_OUTCOME_ID_Event = "st-roll-settings-Event-explode-outcome";
+const SETTINGS_SUMMARY_OUTCOME_ID_Event = "st-roll-settings-Event-summary-outcome";
+const SETTINGS_LIST_OUTCOME_PREVIEW_ID_Event = "st-roll-settings-Event-list-outcome-preview";
 const SETTINGS_TIME_LIMIT_ENABLED_ID_Event = "st-roll-settings-Event-time-limit-enabled";
 const SETTINGS_TIME_LIMIT_MIN_ID_Event = "st-roll-settings-Event-time-limit-min-seconds";
+const SETTINGS_TIME_LIMIT_ROW_ID_Event = "st-roll-settings-Event-time-limit-row";
 const SETTINGS_RULE_TEXT_ID_Event = "st-roll-settings-Event-rule-text";
 const SETTINGS_RULE_SAVE_ID_Event = "st-roll-settings-Event-rule-save";
 const SETTINGS_RULE_RESET_ID_Event = "st-roll-settings-Event-rule-reset";
-const DICE_RULE_BLOCK_START_Event = "[[DICE_EVENT_RULES_V1]]";
-const DICE_RULE_BLOCK_END_Event = "[[/DICE_EVENT_RULES_V1]]";
-const DICE_SUMMARY_BLOCK_START_Event = "[[DICE_ROUND_SUMMARY_V1]]";
-const DICE_SUMMARY_BLOCK_END_Event = "[[/DICE_ROUND_SUMMARY_V1]]";
+const SETTINGS_SEARCH_ID_Event = "st-roll-settings-Event-search";
+const SETTINGS_TAB_MAIN_ID_Event = "st-roll-settings-Event-tab-main";
+const SETTINGS_TAB_RULE_ID_Event = "st-roll-settings-Event-tab-rule";
+const SETTINGS_TAB_ABOUT_ID_Event = "st-roll-settings-Event-tab-about";
+const SETTINGS_PANEL_MAIN_ID_Event = "st-roll-settings-Event-panel-main";
+const SETTINGS_PANEL_RULE_ID_Event = "st-roll-settings-Event-panel-rule";
+const SETTINGS_PANEL_ABOUT_ID_Event = "st-roll-settings-Event-panel-about";
+const manifestAny_Event = manifestJson as Record<string, any>;
+const SETTINGS_BADGE_VERSION_Event =
+  typeof manifestJson.version === "string" && manifestJson.version.trim().length > 0
+    ? manifestJson.version.trim()
+    : "unknown";
+const SETTINGS_AUTHOR_TEXT_Event =
+  typeof manifestAny_Event.author === "string" && manifestAny_Event.author.trim().length > 0
+    ? manifestAny_Event.author.trim()
+    : "Shion";
+const SETTINGS_EMAIL_TEXT_Event =
+  typeof manifestAny_Event.email === "string" && manifestAny_Event.email.trim().length > 0
+    ? manifestAny_Event.email.trim()
+    : "348591466@qq.com";
+const SETTINGS_GITHUB_URL_Event =
+  typeof manifestAny_Event.homepage === "string" &&
+  /^https?:\/\//i.test(manifestAny_Event.homepage.trim())
+    ? manifestAny_Event.homepage.trim()
+    : "https://github.com/ShionCox/SillyTavern-Roll";
+const SETTINGS_GITHUB_TEXT_Event = SETTINGS_GITHUB_URL_Event.replace(
+  /^https?:\/\//i,
+  ""
+);
+const DICE_RULE_BLOCK_START_Event = "[DICE_EVENT_RULES]";
+const DICE_RULE_BLOCK_END_Event = "[/DICE_EVENT_RULES]";
+const DICE_SUMMARY_BLOCK_START_Event = "[DICE_ROUND_SUMMARY]";
+const DICE_SUMMARY_BLOCK_END_Event = "[/DICE_ROUND_SUMMARY]";
+const SUMMARY_MAX_EVENTS_Event = 20;
+const SUMMARY_MAX_TOTAL_EVENT_LINES_Event = 60;
+const SUMMARY_HISTORY_ROUNDS_MIN_Event = 1;
+const SUMMARY_HISTORY_ROUNDS_MAX_Event = 10;
+const SUMMARY_HISTORY_MAX_STORED_Event = 20;
+const OUTCOME_TEXT_MAX_LEN_Event = 400;
 const ISO_8601_DURATION_REGEX_Event =
   /^P(?=\d|T\d)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/i;
-const DEFAULT_RULE_TEXT_Event = `你必须遵循以下骰子事件协议：
-1. 当需要触发掷骰事件时，在回复末尾输出一个 \`\`\`rolljson 代码块。
-2. 严禁使用 \`\`\`json 或其他语言标签包装事件数据。
-3. JSON 顶层必须是对象，且结构固定为：
+const DEFAULT_RULE_TEXT_Event = `你必须严格遵循以下骰子事件协议：
+1. 当需要触发掷骰事件时，只在回复末尾输出一个 \`\`\`rolljson 代码块。
+2. 禁止使用 \`\`\`json 或其他语言标签；必须是 \`\`\`rolljson。
+3. 顶层结构固定为：
 {"type":"dice_events","version":"1","events":[...]}
-4. events 中每个事件都必须包含字段：id/title/checkDice/dc/skill/desc。
-5. compare 可选，支持 >= > <= <，缺省按 >= 处理。
-6. 建议增加 scope 字段：protagonist（主角行动事件）/character（角色自身事件）/all（任意一方事件）。
-7. timeLimit 可选；若提供，必须使用 ISO 8601 duration 格式（例如 PT30S、PT5M），并用于时限倒计时。
-8. 非事件叙事文本请正常输出；事件信息只放在该 rolljson 代码块内。
-9. DICE_ROUND_SUMMARY内的是本轮事件总结，会影响AI对事件的理解和后续行为；请务必准确描述事件经过和结果（不需要说骰子结果之类的）。
-10. 非必要的时候不需要使用本系统。`;
+4. events[i] 必填字段与类型：
+- id: string
+- title: string
+- checkDice: string（例如 "1d100"、"1d20+3"、"1d6!"）
+- dc: number
+- skill: string
+- desc: string
+5. events[i] 可选字段与类型：
+- compare: string，仅允许 >= > <= <，缺省按 >=
+- scope: string，仅允许 protagonist / character / all
+- rollMode: string，仅允许 auto / manual，缺省按 manual
+- timeLimit: string，必须是 ISO 8601 duration（例如 PT30S、PT5M）
+- outcomes: object，可包含 success / failure / explode 三个剧情走向文本
+6. outcomes 子字段说明：
+- outcomes.success: 判定成功时的剧情走向
+- outcomes.failure: 判定失败时的剧情走向（超时失败也归入 failure）
+- outcomes.explode: 触发爆骰时的特殊剧情走向（优先于 success/failure）
+7. 兼容字段：successOutcome / failureOutcome / explodeOutcome 也会被识别，但推荐使用 outcomes 对象。
+8. 重要：字段类型必须正确，尤其 checkDice 必须是字符串，不能是布尔值或数字。
+9. 正确示例（单事件）：
+\`\`\`rolljson
+{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d100!","dc":60,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
+\`\`\`
+10. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
+11. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为；请据此保持剧情与状态一致。`;
 const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   enabled: true,
   autoSendRuleToAI: true,
+  enableAiRollMode: true,
+  enableExplodingDice: true,
+  summaryDetailMode: "minimal",
+  summaryHistoryRounds: 3,
   eventApplyScope: "protagonist_only",
+  enableOutcomeBranches: true,
+  enableExplodeOutcomeBranch: true,
+  includeOutcomeInSummary: true,
+  showOutcomePreviewInListCard: true,
   enableTimeLimit: true,
   minTimeLimitSeconds: 10,
   ruleText: DEFAULT_RULE_TEXT_Event,
@@ -856,6 +718,25 @@ function getSettingsEvent(): DicePluginSettingsEvent {
   const bucket = allSettings[MODULE_NAME_Event] as DicePluginSettingsEvent;
   bucket.enabled = bucket.enabled !== false;
   bucket.autoSendRuleToAI = bucket.autoSendRuleToAI !== false;
+  bucket.enableAiRollMode = bucket.enableAiRollMode !== false;
+  bucket.enableExplodingDice = bucket.enableExplodingDice !== false;
+  bucket.enableOutcomeBranches = bucket.enableOutcomeBranches !== false;
+  bucket.enableExplodeOutcomeBranch = bucket.enableExplodeOutcomeBranch !== false;
+  bucket.includeOutcomeInSummary = bucket.includeOutcomeInSummary !== false;
+  bucket.showOutcomePreviewInListCard = bucket.showOutcomePreviewInListCard !== false;
+  const rawSummaryDetail = String((bucket as any).summaryDetailMode || "").toLowerCase();
+  bucket.summaryDetailMode =
+    rawSummaryDetail === "balanced" || rawSummaryDetail === "detailed"
+      ? (rawSummaryDetail as SummaryDetailModeEvent)
+      : "minimal";
+  const rawSummaryRounds = Number((bucket as any).summaryHistoryRounds);
+  const normalizedSummaryRounds = Number.isFinite(rawSummaryRounds)
+    ? Math.floor(rawSummaryRounds)
+    : DEFAULT_SETTINGS_Event.summaryHistoryRounds;
+  bucket.summaryHistoryRounds = Math.min(
+    SUMMARY_HISTORY_ROUNDS_MAX_Event,
+    Math.max(SUMMARY_HISTORY_ROUNDS_MIN_Event, normalizedSummaryRounds)
+  );
   bucket.eventApplyScope = bucket.eventApplyScope === "all" ? "all" : "protagonist_only";
   bucket.enableTimeLimit = bucket.enableTimeLimit !== false;
   const minSecondsRaw = Number(bucket.minTimeLimitSeconds);
@@ -875,8 +756,24 @@ function updateSettingsEvent(patch: Partial<DicePluginSettingsEvent>): void {
   syncSettingsUiEvent();
 }
 
+function syncSettingsBadgeVersionEvent(): void {
+  const badge = document.getElementById(SETTINGS_BADGE_ID_Event);
+  if (!badge) return;
+  badge.textContent = SETTINGS_BADGE_VERSION_Event;
+}
+
+function ensureSettingsCardStylesEvent(): void {
+  if (document.getElementById(SETTINGS_STYLE_ID_Event)) return;
+
+  const style = document.createElement("style");
+  style.id = SETTINGS_STYLE_ID_Event;
+  style.textContent = buildSettingsCardStylesTemplateEvent(SETTINGS_CARD_ID_Event);
+  document.head.appendChild(style);
+}
+
 function mountSettingsCardEvent(attempt = 0): void {
   if (document.getElementById(SETTINGS_CARD_ID_Event)) {
+    syncSettingsBadgeVersionEvent();
     syncSettingsUiEvent();
     return;
   }
@@ -889,73 +786,140 @@ function mountSettingsCardEvent(attempt = 0): void {
     return;
   }
 
+  ensureSettingsCardStylesEvent();
+
   const root = document.createElement("div");
   root.id = SETTINGS_CARD_ID_Event;
-  root.style.marginBottom = "12px";
   const drawerToggleId = `${SETTINGS_CARD_ID_Event}-toggle`;
   const drawerContentId = `${SETTINGS_CARD_ID_Event}-content`;
   const drawerIconId = `${SETTINGS_CARD_ID_Event}-icon`;
-  root.innerHTML = `
-    <div class="st-roll-drawer" style="border:1px solid rgba(197,160,89,0.35);border-radius:8px;overflow:hidden;">
-      <div class="st-roll-drawer-toggle" id="${drawerToggleId}" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(0,0,0,0.28);border-bottom:1px solid rgba(197,160,89,0.2);">
-        <b>骰子设置</b>
-        <span id="${drawerIconId}" style="font-size:14px;opacity:0.9;">▾</span>
-      </div>
-      <div class="st-roll-drawer-content" id="${drawerContentId}" style="display:none;padding:10px;background:linear-gradient(135deg, rgba(43,29,29,0.7), rgba(26,16,16,0.7));">
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;">
-          <input id="${SETTINGS_ENABLED_ID_Event}" type="checkbox" />
-          <span>启用事件驱动骰子系统</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input id="${SETTINGS_RULE_ID_Event}" type="checkbox" />
-          <span>默认发送规则给 AI</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;white-space:nowrap;">
-          <span>事件应用范围</span>
-          <select id="${SETTINGS_SCOPE_ID_Event}" style="min-width:170px;background:rgba(0,0,0,0.25);color:inherit;border:1px solid rgba(197,160,89,0.35);border-radius:6px;padding:2px 6px;">
-            <option value="protagonist_only">仅主角行动事件</option>
-            <option value="all">全部事件</option>
-          </select>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;">
-          <input id="${SETTINGS_TIME_LIMIT_ENABLED_ID_Event}" type="checkbox" />
-          <span>开启事件时限功能</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-          <span>最短时限(秒)</span>
-          <input id="${SETTINGS_TIME_LIMIT_MIN_ID_Event}" type="number" min="1" step="1" style="width:120px;background:rgba(0,0,0,0.25);color:inherit;border:1px solid rgba(197,160,89,0.35);border-radius:6px;padding:2px 6px;" />
-        </label>
-        <div style="margin-top:8px;font-size:12px;opacity:0.8;line-height:1.4;">
-          开启后会在每轮生成前注入事件协议，并在用户发送时隐式附带上一轮掷骰总结。时限开启时，低于最短秒数的时限会自动提升。
-        </div>
-        <div style="margin-top:10px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-            <span style="font-size:12px;opacity:0.9;">事件协议规则（可手动编辑）</span>
-            <div style="display:flex;gap:8px;">
-              <button id="${SETTINGS_RULE_SAVE_ID_Event}" type="button" style="cursor:pointer;padding:2px 8px;border:1px solid rgba(197,160,89,0.45);border-radius:4px;background:rgba(197,160,89,0.12);color:inherit;">保存规则</button>
-              <button id="${SETTINGS_RULE_RESET_ID_Event}" type="button" style="cursor:pointer;padding:2px 8px;border:1px solid rgba(255,255,255,0.25);border-radius:4px;background:rgba(255,255,255,0.08);color:inherit;">恢复默认</button>
-            </div>
-          </div>
-          <textarea id="${SETTINGS_RULE_TEXT_ID_Event}" rows="10" style="width:100%;resize:vertical;box-sizing:border-box;border:1px solid rgba(197,160,89,0.3);border-radius:6px;background:rgba(0,0,0,0.25);color:inherit;padding:8px;font-size:12px;line-height:1.5;"></textarea>
-        </div>
-      </div>
-    </div>
-  `;
+  const templateIds: SettingsCardTemplateIdsEvent = {
+    cardId: SETTINGS_CARD_ID_Event,
+    drawerToggleId,
+    drawerContentId,
+    drawerIconId,
+    badgeId: SETTINGS_BADGE_ID_Event,
+    badgeText: SETTINGS_BADGE_VERSION_Event,
+    authorText: SETTINGS_AUTHOR_TEXT_Event,
+    emailText: SETTINGS_EMAIL_TEXT_Event,
+    githubText: SETTINGS_GITHUB_TEXT_Event,
+    githubUrl: SETTINGS_GITHUB_URL_Event,
+    searchId: SETTINGS_SEARCH_ID_Event,
+    tabMainId: SETTINGS_TAB_MAIN_ID_Event,
+    tabRuleId: SETTINGS_TAB_RULE_ID_Event,
+    tabAboutId: SETTINGS_TAB_ABOUT_ID_Event,
+    panelMainId: SETTINGS_PANEL_MAIN_ID_Event,
+    panelRuleId: SETTINGS_PANEL_RULE_ID_Event,
+    panelAboutId: SETTINGS_PANEL_ABOUT_ID_Event,
+    enabledId: SETTINGS_ENABLED_ID_Event,
+    ruleId: SETTINGS_RULE_ID_Event,
+    aiRollModeId: SETTINGS_AI_ROLL_MODE_ID_Event,
+    explodingEnabledId: SETTINGS_EXPLODING_ENABLED_ID_Event,
+    summaryDetailId: SETTINGS_SUMMARY_DETAIL_ID_Event,
+    summaryRoundsId: SETTINGS_SUMMARY_ROUNDS_ID_Event,
+    scopeId: SETTINGS_SCOPE_ID_Event,
+    outcomeBranchesId: SETTINGS_OUTCOME_BRANCHES_ID_Event,
+    explodeOutcomeId: SETTINGS_EXPLODE_OUTCOME_ID_Event,
+    includeOutcomeSummaryId: SETTINGS_SUMMARY_OUTCOME_ID_Event,
+    listOutcomePreviewId: SETTINGS_LIST_OUTCOME_PREVIEW_ID_Event,
+    timeLimitEnabledId: SETTINGS_TIME_LIMIT_ENABLED_ID_Event,
+    timeLimitMinId: SETTINGS_TIME_LIMIT_MIN_ID_Event,
+    timeLimitRowId: SETTINGS_TIME_LIMIT_ROW_ID_Event,
+    ruleSaveId: SETTINGS_RULE_SAVE_ID_Event,
+    ruleResetId: SETTINGS_RULE_RESET_ID_Event,
+    ruleTextId: SETTINGS_RULE_TEXT_ID_Event,
+  };
+  root.innerHTML = buildSettingsCardHtmlTemplateEvent(templateIds);
 
   container.prepend(root);
+  syncSettingsBadgeVersionEvent();
 
-  const drawerToggle = document.getElementById(drawerToggleId);
-  const drawerContent = document.getElementById(drawerContentId) as HTMLElement | null;
-  const drawerIcon = document.getElementById(drawerIconId);
+  const tabMain = document.getElementById(SETTINGS_TAB_MAIN_ID_Event) as HTMLButtonElement | null;
+  const tabRule = document.getElementById(SETTINGS_TAB_RULE_ID_Event) as HTMLButtonElement | null;
+  const tabAbout = document.getElementById(SETTINGS_TAB_ABOUT_ID_Event) as HTMLButtonElement | null;
+  const panelMain = document.getElementById(SETTINGS_PANEL_MAIN_ID_Event) as HTMLElement | null;
+  const panelRule = document.getElementById(SETTINGS_PANEL_RULE_ID_Event) as HTMLElement | null;
+  const panelAbout = document.getElementById(SETTINGS_PANEL_ABOUT_ID_Event) as HTMLElement | null;
+  const searchInput = document.getElementById(
+    SETTINGS_SEARCH_ID_Event
+  ) as HTMLInputElement | null;
+  const searchableMainItems = panelMain
+    ? Array.from(panelMain.querySelectorAll<HTMLElement>(".st-roll-search-item"))
+    : [];
+  const searchableRuleItems = panelRule
+    ? Array.from(panelRule.querySelectorAll<HTMLElement>(".st-roll-search-item"))
+    : [];
+  const searchableAboutItems = panelAbout
+    ? Array.from(panelAbout.querySelectorAll<HTMLElement>(".st-roll-search-item"))
+    : [];
+  const searchableItems = [...searchableMainItems, ...searchableRuleItems, ...searchableAboutItems];
 
-  drawerToggle?.addEventListener("click", () => {
-    if (!drawerContent) return;
-    const isOpen = drawerContent.style.display !== "none";
-    drawerContent.style.display = isOpen ? "none" : "block";
-    if (drawerIcon) {
-      drawerIcon.textContent = isOpen ? "▾" : "▴";
+  let activeTab: "main" | "rule" | "about" = "main";
+
+  const activateTab = (tab: "main" | "rule" | "about") => {
+    activeTab = tab;
+    const isMain = tab === "main";
+    const isRule = tab === "rule";
+    const isAbout = tab === "about";
+    tabMain?.classList.toggle("is-active", isMain);
+    tabRule?.classList.toggle("is-active", isRule);
+    tabAbout?.classList.toggle("is-active", isAbout);
+    if (panelMain) panelMain.hidden = !isMain;
+    if (panelRule) panelRule.hidden = !isRule;
+    if (panelAbout) panelAbout.hidden = !isAbout;
+  };
+
+  const applySettingsSearchFilter = () => {
+    const query = String(searchInput?.value ?? "").trim().toLowerCase();
+    const tokens = query.split(/\s+/).filter(Boolean);
+
+    for (const item of searchableItems) {
+      const source = `${item.dataset.stRollSearch ?? ""} ${item.textContent ?? ""}`.toLowerCase();
+      const matched = tokens.every((token) => source.includes(token));
+      item.classList.toggle("is-hidden-by-search", !matched);
     }
+
+    if (!tokens.length) return;
+
+    const hasMainVisible = searchableMainItems.some(
+      (item) => !item.classList.contains("is-hidden-by-search")
+    );
+    const hasRuleVisible = searchableRuleItems.some(
+      (item) => !item.classList.contains("is-hidden-by-search")
+    );
+    const hasAboutVisible = searchableAboutItems.some(
+      (item) => !item.classList.contains("is-hidden-by-search")
+    );
+    if (activeTab === "main" && !hasMainVisible && hasRuleVisible) {
+      activateTab("rule");
+    } else if (activeTab === "main" && !hasMainVisible && !hasRuleVisible && hasAboutVisible) {
+      activateTab("about");
+    } else if (activeTab === "rule" && !hasRuleVisible && hasMainVisible) {
+      activateTab("main");
+    } else if (activeTab === "rule" && !hasRuleVisible && !hasMainVisible && hasAboutVisible) {
+      activateTab("about");
+    } else if (activeTab === "about" && !hasAboutVisible && hasMainVisible) {
+      activateTab("main");
+    } else if (activeTab === "about" && !hasAboutVisible && !hasMainVisible && hasRuleVisible) {
+      activateTab("rule");
+    }
+  };
+
+  activateTab("main");
+  tabMain?.addEventListener("click", () => {
+    activateTab("main");
+    applySettingsSearchFilter();
   });
+  tabRule?.addEventListener("click", () => {
+    activateTab("rule");
+    applySettingsSearchFilter();
+  });
+  tabAbout?.addEventListener("click", () => {
+    activateTab("about");
+    applySettingsSearchFilter();
+  });
+  searchInput?.addEventListener("input", applySettingsSearchFilter);
+  applySettingsSearchFilter();
 
   const enabledInput = document.getElementById(
     SETTINGS_ENABLED_ID_Event
@@ -963,9 +927,33 @@ function mountSettingsCardEvent(attempt = 0): void {
   const ruleInput = document.getElementById(
     SETTINGS_RULE_ID_Event
   ) as HTMLInputElement | null;
+  const aiRollModeInput = document.getElementById(
+    SETTINGS_AI_ROLL_MODE_ID_Event
+  ) as HTMLInputElement | null;
+  const explodingEnabledInput = document.getElementById(
+    SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const summaryDetailInput = document.getElementById(
+    SETTINGS_SUMMARY_DETAIL_ID_Event
+  ) as HTMLSelectElement | null;
+  const summaryRoundsInput = document.getElementById(
+    SETTINGS_SUMMARY_ROUNDS_ID_Event
+  ) as HTMLInputElement | null;
   const scopeInput = document.getElementById(
     SETTINGS_SCOPE_ID_Event
   ) as HTMLSelectElement | null;
+  const outcomeBranchesInput = document.getElementById(
+    SETTINGS_OUTCOME_BRANCHES_ID_Event
+  ) as HTMLInputElement | null;
+  const explodeOutcomeInput = document.getElementById(
+    SETTINGS_EXPLODE_OUTCOME_ID_Event
+  ) as HTMLInputElement | null;
+  const includeOutcomeSummaryInput = document.getElementById(
+    SETTINGS_SUMMARY_OUTCOME_ID_Event
+  ) as HTMLInputElement | null;
+  const listOutcomePreviewInput = document.getElementById(
+    SETTINGS_LIST_OUTCOME_PREVIEW_ID_Event
+  ) as HTMLInputElement | null;
   const timeLimitEnabledInput = document.getElementById(
     SETTINGS_TIME_LIMIT_ENABLED_ID_Event
   ) as HTMLInputElement | null;
@@ -992,11 +980,56 @@ function mountSettingsCardEvent(attempt = 0): void {
     updateSettingsEvent({ autoSendRuleToAI: value });
   });
 
+  aiRollModeInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ enableAiRollMode: value });
+  });
+
+  explodingEnabledInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ enableExplodingDice: value });
+  });
+
+  summaryDetailInput?.addEventListener("change", (event) => {
+    const raw = String((event.target as HTMLSelectElement).value || "");
+    const value: SummaryDetailModeEvent =
+      raw === "balanced" || raw === "detailed" ? (raw as SummaryDetailModeEvent) : "minimal";
+    updateSettingsEvent({ summaryDetailMode: value });
+  });
+
+  summaryRoundsInput?.addEventListener("change", (event) => {
+    const raw = Number((event.target as HTMLInputElement).value);
+    const value = Number.isFinite(raw)
+      ? Math.min(SUMMARY_HISTORY_ROUNDS_MAX_Event, Math.max(SUMMARY_HISTORY_ROUNDS_MIN_Event, Math.floor(raw)))
+      : DEFAULT_SETTINGS_Event.summaryHistoryRounds;
+    updateSettingsEvent({ summaryHistoryRounds: value });
+  });
+
   scopeInput?.addEventListener("change", (event) => {
     const value = String((event.target as HTMLSelectElement).value || "");
     updateSettingsEvent({
       eventApplyScope: value === "all" ? "all" : "protagonist_only",
     });
+  });
+
+  outcomeBranchesInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ enableOutcomeBranches: value });
+  });
+
+  explodeOutcomeInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ enableExplodeOutcomeBranch: value });
+  });
+
+  includeOutcomeSummaryInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ includeOutcomeInSummary: value });
+  });
+
+  listOutcomePreviewInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    updateSettingsEvent({ showOutcomePreviewInListCard: value });
   });
 
   timeLimitEnabledInput?.addEventListener("input", (event) => {
@@ -1034,28 +1067,80 @@ function syncSettingsUiEvent(): void {
   const ruleInput = document.getElementById(
     SETTINGS_RULE_ID_Event
   ) as HTMLInputElement | null;
+  const aiRollModeInput = document.getElementById(
+    SETTINGS_AI_ROLL_MODE_ID_Event
+  ) as HTMLInputElement | null;
+  const explodingEnabledInput = document.getElementById(
+    SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const summaryDetailInput = document.getElementById(
+    SETTINGS_SUMMARY_DETAIL_ID_Event
+  ) as HTMLSelectElement | null;
+  const summaryRoundsInput = document.getElementById(
+    SETTINGS_SUMMARY_ROUNDS_ID_Event
+  ) as HTMLInputElement | null;
   const scopeInput = document.getElementById(
     SETTINGS_SCOPE_ID_Event
   ) as HTMLSelectElement | null;
+  const outcomeBranchesInput = document.getElementById(
+    SETTINGS_OUTCOME_BRANCHES_ID_Event
+  ) as HTMLInputElement | null;
+  const explodeOutcomeInput = document.getElementById(
+    SETTINGS_EXPLODE_OUTCOME_ID_Event
+  ) as HTMLInputElement | null;
+  const includeOutcomeSummaryInput = document.getElementById(
+    SETTINGS_SUMMARY_OUTCOME_ID_Event
+  ) as HTMLInputElement | null;
+  const listOutcomePreviewInput = document.getElementById(
+    SETTINGS_LIST_OUTCOME_PREVIEW_ID_Event
+  ) as HTMLInputElement | null;
   const timeLimitEnabledInput = document.getElementById(
     SETTINGS_TIME_LIMIT_ENABLED_ID_Event
   ) as HTMLInputElement | null;
   const minTimeLimitInput = document.getElementById(
     SETTINGS_TIME_LIMIT_MIN_ID_Event
   ) as HTMLInputElement | null;
+  const minTimeLimitRow = document.getElementById(
+    SETTINGS_TIME_LIMIT_ROW_ID_Event
+  ) as HTMLElement | null;
   const ruleTextInput = document.getElementById(
     SETTINGS_RULE_TEXT_ID_Event
   ) as HTMLTextAreaElement | null;
 
   if (enabledInput) enabledInput.checked = Boolean(settings.enabled);
   if (ruleInput) ruleInput.checked = Boolean(settings.autoSendRuleToAI);
+  if (aiRollModeInput) aiRollModeInput.checked = Boolean(settings.enableAiRollMode);
+  if (explodingEnabledInput) explodingEnabledInput.checked = Boolean(settings.enableExplodingDice);
+  if (summaryDetailInput) summaryDetailInput.value = settings.summaryDetailMode;
+  if (summaryRoundsInput) summaryRoundsInput.value = String(settings.summaryHistoryRounds);
   if (scopeInput) scopeInput.value = settings.eventApplyScope;
+  if (outcomeBranchesInput) outcomeBranchesInput.checked = Boolean(settings.enableOutcomeBranches);
+  if (explodeOutcomeInput) explodeOutcomeInput.checked = Boolean(settings.enableExplodeOutcomeBranch);
+  if (includeOutcomeSummaryInput) {
+    includeOutcomeSummaryInput.checked = Boolean(settings.includeOutcomeInSummary);
+  }
+  if (listOutcomePreviewInput) {
+    listOutcomePreviewInput.checked = Boolean(settings.showOutcomePreviewInListCard);
+  }
+  if (explodeOutcomeInput) {
+    explodeOutcomeInput.disabled = !settings.enableOutcomeBranches;
+    explodeOutcomeInput.style.opacity = settings.enableOutcomeBranches ? "1" : "0.5";
+  }
+  if (includeOutcomeSummaryInput) {
+    includeOutcomeSummaryInput.disabled = !settings.enableOutcomeBranches;
+    includeOutcomeSummaryInput.style.opacity = settings.enableOutcomeBranches ? "1" : "0.5";
+  }
+  if (listOutcomePreviewInput) {
+    listOutcomePreviewInput.disabled = !settings.enableOutcomeBranches;
+    listOutcomePreviewInput.style.opacity = settings.enableOutcomeBranches ? "1" : "0.5";
+  }
   if (timeLimitEnabledInput) timeLimitEnabledInput.checked = Boolean(settings.enableTimeLimit);
   if (minTimeLimitInput) {
     minTimeLimitInput.value = String(settings.minTimeLimitSeconds);
     minTimeLimitInput.disabled = !settings.enableTimeLimit;
     minTimeLimitInput.style.opacity = settings.enableTimeLimit ? "1" : "0.5";
   }
+  minTimeLimitRow?.classList.toggle("is-disabled", !settings.enableTimeLimit);
   if (ruleTextInput) {
     const nextText = settings.ruleText || DEFAULT_RULE_TEXT_Event;
     if (ruleTextInput.value !== nextText) {
@@ -1146,66 +1231,251 @@ function stripManagedBlocksEvent(input: string): string {
   return normalizeBlankLinesEvent(
     input
       .replace(
-        /\[\[DICE_EVENT_RULES_V1\]\][\s\S]*?\[\[\/DICE_EVENT_RULES_V1\]\]/g,
+        /\[DICE_EVENT_RULES\][\s\S]*?\[\/DICE_EVENT_RULES\]/g,
         ""
       )
       .replace(
-        /\[\[DICE_ROUND_SUMMARY_V1\]\][\s\S]*?\[\[\/DICE_ROUND_SUMMARY_V1\]\]/g,
+        /\[DICE_ROUND_SUMMARY\][\s\S]*?\[\/DICE_ROUND_SUMMARY\]/g,
         ""
       )
   );
 }
 
-function buildDiceRuleBlockEvent(): string {
+function buildDiceRuleBlockCompactEvent(): string {
   const settings = getSettingsEvent();
   const rawRuleText =
     typeof settings.ruleText === "string" && settings.ruleText.trim().length > 0
       ? settings.ruleText
       : DEFAULT_RULE_TEXT_Event;
-  const ruleText = rawRuleText.replace(/\[\[\/?DICE_EVENT_RULES_V1\]\]/g, "").trim();
-  const timeoutRule =
-    settings.enableTimeLimit
-      ? `时限系统配置：已开启。若输出 timeLimit，则其等效时长不得小于 ${settings.minTimeLimitSeconds} 秒。`
-      : "时限系统配置：已关闭。请不要输出 timeLimit 字段。";
+  const ruleText = rawRuleText.replace(/\[\/?DICE_EVENT_RULES\]/g, "").trim();
+
   return `${DICE_RULE_BLOCK_START_Event}
 ${ruleText}
-
-${timeoutRule}
 ${DICE_RULE_BLOCK_END_Event}`;
 }
 
-function buildRoundSummaryEvent(round: PendingRoundEvent): string {
+function buildDiceRuleBlockEvent(): string {
+  return buildDiceRuleBlockCompactEvent();
+}
+
+function createRoundSummarySnapshotEvent(
+  round: PendingRoundEvent,
+  now = Date.now()
+): RoundSummarySnapshotEvent {
   ensureRoundEventTimersSyncedEvent(round);
+  const settings = getSettingsEvent();
+  const events: RoundSummaryEventItemEvent[] = [];
+  let rolledCount = 0;
+
+  for (const event of round.events) {
+    const record = getLatestRollRecordForEvent(round, event.id);
+    const status: SummaryEventStatusEvent = record
+      ? record.source === "timeout_auto_fail"
+        ? "timeout"
+        : "done"
+      : "pending";
+    const total =
+      record && Number.isFinite(Number(record.result.total))
+        ? Number(record.result.total)
+        : null;
+    const success = record ? record.success : null;
+    const resolvedOutcome = resolveTriggeredOutcomeEvent(event, record, settings);
+    if (record) rolledCount++;
+
+    events.push({
+      id: event.id,
+      title: event.title,
+      desc: event.desc,
+      skill: event.skill,
+      checkDice: event.checkDice,
+      compare: normalizeCompareOperatorEvent(event.compare) ?? ">=",
+      dc: Number.isFinite(event.dc) ? Number(event.dc) : 0,
+      rollMode: event.rollMode === "auto" ? "auto" : "manual",
+      timeLimit: event.timeLimit ?? "none",
+      status,
+      resultSource: record?.source ?? null,
+      total,
+      success,
+      outcomeKind: resolvedOutcome.kind,
+      outcomeText: resolvedOutcome.text,
+      explosionTriggered: resolvedOutcome.explosionTriggered,
+    });
+  }
+
+  return {
+    roundId: round.roundId,
+    openedAt: round.openedAt,
+    closedAt: now,
+    eventsCount: round.events.length,
+    rolledCount,
+    events,
+  };
+}
+
+function ensureSummaryHistoryEvent(meta: DiceMetaEvent): RoundSummarySnapshotEvent[] {
+  if (!Array.isArray(meta.summaryHistory)) {
+    meta.summaryHistory = [];
+  }
+  return meta.summaryHistory;
+}
+
+function trimSummaryHistoryEvent(history: RoundSummarySnapshotEvent[]): void {
+  if (history.length <= SUMMARY_HISTORY_MAX_STORED_Event) return;
+  history.splice(0, history.length - SUMMARY_HISTORY_MAX_STORED_Event);
+}
+
+function normalizeSummaryInlineTextEvent(raw: string): string {
+  const text = String(raw ?? "").replace(/\s+/g, " ").trim();
+  return text.length > 0 ? text : "（空）";
+}
+
+function truncateSummaryTextEvent(raw: string, maxLen: number): string {
+  const normalized = normalizeSummaryInlineTextEvent(raw);
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(1, maxLen))}（已截断）`;
+}
+
+function getSummaryDescMaxLenByModeEvent(detailMode: SummaryDetailModeEvent): number {
+  if (detailMode === "minimal") return 60;
+  if (detailMode === "balanced") return 90;
+  return 140;
+}
+
+function toSummarySourceTextEvent(source: EventRollSourceEvent | null | undefined): string {
+  if (source === "manual_roll") return "手动检定";
+  if (source === "ai_auto_roll") return "AI自动检定";
+  if (source === "timeout_auto_fail") return "超时判定";
+  return "未知";
+}
+
+function toSummaryResultSentenceEvent(item: RoundSummaryEventItemEvent): string {
+  if (item.status === "pending") {
+    return "待判定（尚未掷骰）";
+  }
+
+  if (item.status === "timeout" || item.resultSource === "timeout_auto_fail") {
+    return "超时未操作，系统判定失败";
+  }
+
+  const totalText = item.total == null ? "-" : String(item.total);
+
+  if (item.success === true) {
+    if (item.resultSource === "ai_auto_roll") {
+      return `AI自动检定成功（总值 ${totalText}）`;
+    }
+    return `成功（总值 ${totalText}）`;
+  }
+
+  if (item.success === false) {
+    if (item.resultSource === "ai_auto_roll") {
+      return `AI自动检定失败（总值 ${totalText}）`;
+    }
+    return `失败（总值 ${totalText}）`;
+  }
+
+  return `已完成（总值 ${totalText}）`;
+}
+
+function toSummaryOutcomeSentenceEvent(item: RoundSummaryEventItemEvent): string {
+  const text = truncateSummaryTextEvent(item.outcomeText || "", 120);
+  if (item.outcomeKind === "explode") {
+    return `爆骰走向：${text}`;
+  }
+  if (item.outcomeKind === "success") {
+    return `成功走向：${text}`;
+  }
+  if (item.outcomeKind === "failure") {
+    return `失败走向：${text}`;
+  }
+  return `走向：${text}`;
+}
+
+function buildSummaryEventNaturalLineByModeEvent(
+  item: RoundSummaryEventItemEvent,
+  detailMode: SummaryDetailModeEvent,
+  includeOutcomeInSummary: boolean
+): string {
+  const title = truncateSummaryTextEvent(item.title, 48);
+  const desc = truncateSummaryTextEvent(item.desc, getSummaryDescMaxLenByModeEvent(detailMode));
+  const resultSentence = toSummaryResultSentenceEvent(item);
+  const outcomeSentence = includeOutcomeInSummary ? toSummaryOutcomeSentenceEvent(item) : "";
+
+  if (detailMode === "minimal") {
+    return includeOutcomeInSummary
+      ? `- 标题：${title}｜描述：${desc}｜结果：${resultSentence}｜${outcomeSentence}`
+      : `- 标题：${title}｜描述：${desc}｜结果：${resultSentence}`;
+  }
+
+  const skill = truncateSummaryTextEvent(item.skill, 20);
+  const checkDice = truncateSummaryTextEvent(item.checkDice, 24);
+  const checkText = `${skill} ${checkDice}，条件 ${item.compare} ${item.dc}`;
+
+  if (detailMode === "balanced") {
+    return includeOutcomeInSummary
+      ? `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜结果：${resultSentence}｜${outcomeSentence}`
+      : `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜结果：${resultSentence}`;
+  }
+
+  const sourceText = toSummarySourceTextEvent(item.resultSource);
+  const timeLimit = truncateSummaryTextEvent(item.timeLimit || "none", 26);
+  return includeOutcomeInSummary
+    ? `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}｜${outcomeSentence}`
+    : `- 标题：${title}｜描述：${desc}｜检定：${checkText}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}`;
+}
+
+function buildSummaryBlockFromHistoryEvent(
+  history: RoundSummarySnapshotEvent[],
+  detailMode: SummaryDetailModeEvent,
+  lastNRounds: number,
+  includeOutcomeInSummary: boolean
+): string {
+  if (!Array.isArray(history) || history.length === 0) return "";
+  const roundsWindow = Math.min(
+    SUMMARY_HISTORY_ROUNDS_MAX_Event,
+    Math.max(SUMMARY_HISTORY_ROUNDS_MIN_Event, Math.floor(Number(lastNRounds) || 1))
+  );
+  const selected = history.slice(-roundsWindow);
+  if (selected.length === 0) return "";
+
   const lines: string[] = [];
   lines.push(DICE_SUMMARY_BLOCK_START_Event);
-  lines.push(`round_id: ${round.roundId}`);
-  lines.push(`opened_at: ${new Date(round.openedAt).toISOString()}`);
-  lines.push(`events_offered: ${round.events.length}`);
-  if (round.events.length > 0) {
-    lines.push("events:");
-    for (const event of round.events) {
-      const timer = round.eventTimers?.[event.id];
-      const offeredAt =
-        timer?.offeredAt ?? (typeof event.offeredAt === "number" ? event.offeredAt : null);
-      const deadlineAt =
-        timer?.deadlineAt ?? (typeof event.deadlineAt === "number" ? event.deadlineAt : null);
-      lines.push(
-        `- id=${event.id} | title=${event.title} | skill=${event.skill} | dice=${event.checkDice} | compare=${event.compare ?? ">="} | dc=${event.dc} | timeLimit=${event.timeLimit ?? "none"} | offered_at=${offeredAt ? new Date(offeredAt).toISOString() : "null"} | deadline_at=${deadlineAt ? new Date(deadlineAt).toISOString() : "null"}`
-      );
+  lines.push(
+    `v=4 fmt=nl detail=${detailMode} window_rounds=${roundsWindow} included_rounds=${selected.length} include_outcome=${includeOutcomeInSummary ? "1" : "0"}`
+  );
+
+  let emittedEventLines = 0;
+  let truncatedByTotalLimit = false;
+  for (let i = 0; i < selected.length; i++) {
+    const snapshot = selected[i];
+    const unresolved = Math.max(0, snapshot.eventsCount - snapshot.rolledCount);
+    lines.push(
+      `【第 ${i + 1} 轮 / roundId=${snapshot.roundId} / 关闭时间=${new Date(
+        snapshot.closedAt
+      ).toISOString()}】`
+    );
+    lines.push(
+      `本轮事件数=${snapshot.eventsCount}，已结算=${snapshot.rolledCount}，未结算=${unresolved}`
+    );
+
+    const limitedPerRound = snapshot.events.slice(0, SUMMARY_MAX_EVENTS_Event);
+    for (const item of limitedPerRound) {
+      if (emittedEventLines >= SUMMARY_MAX_TOTAL_EVENT_LINES_Event) {
+        truncatedByTotalLimit = true;
+        break;
+      }
+      lines.push(buildSummaryEventNaturalLineByModeEvent(item, detailMode, includeOutcomeInSummary));
+      emittedEventLines++;
     }
+
+    if (snapshot.events.length > SUMMARY_MAX_EVENTS_Event) {
+      lines.push(`注：本轮还有 ${snapshot.events.length - SUMMARY_MAX_EVENTS_Event} 个事件未展开。`);
+    }
+
+    if (truncatedByTotalLimit) break;
   }
-  if (round.rolls.length === 0) {
-    lines.push("rolls: 本轮无掷骰记录。");
-  } else {
-    lines.push("rolls:");
-    for (const record of round.rolls) {
-      const timer = round.eventTimers?.[record.eventId];
-      const deadlineAt = timer?.deadlineAt ?? null;
-      const source = record.source || "manual_roll";
-      lines.push(
-        `- roll_id=${record.rollId} | event_id=${record.eventId} | title=${record.eventTitle} | expr=${record.diceExpr} | rolls=[${record.result.rolls.join(",")}] | raw=${record.result.rawTotal} | modifier=${formatModifier(record.result.modifier)} | total=${record.result.total} | compare=${record.compareUsed} | dc=${record.dcUsed ?? "null"} | success=${record.success === null ? "null" : record.success ? "true" : "false"} | source=${source} | timeout_at=${record.timeoutAt ? new Date(record.timeoutAt).toISOString() : "null"} | deadline_at=${deadlineAt ? new Date(deadlineAt).toISOString() : "null"}`
-      );
-    }
+
+  if (truncatedByTotalLimit) {
+    lines.push("注：后续事件因长度限制未展开。");
   }
   lines.push(DICE_SUMMARY_BLOCK_END_Event);
   return lines.join("\n");
@@ -1280,17 +1550,35 @@ function composePromptInjectionsEvent(promptChat: TavernMessageEvent[]): string 
   let changed = false;
 
   if (isNewUserPrompt) {
-    if (meta.pendingRound && meta.pendingRound.status === "open") {
-      summaryToInject = buildRoundSummaryEvent(meta.pendingRound);
-      meta.outboundSummary = {
-        userMsgId: currentUserId,
-        roundId: meta.pendingRound.roundId,
-        summaryText: summaryToInject,
-      };
-      meta.pendingRound.status = "sealed";
+    const history = ensureSummaryHistoryEvent(meta);
+    if (meta.pendingRound) {
+      const snapshot = createRoundSummarySnapshotEvent(meta.pendingRound, Date.now());
+      history.push(snapshot);
+      trimSummaryHistoryEvent(history);
       delete meta.pendingRound;
       changed = true;
-    } else if (meta.outboundSummary && meta.outboundSummary.userMsgId !== currentUserId) {
+    }
+
+    summaryToInject = buildSummaryBlockFromHistoryEvent(
+      history,
+      settings.summaryDetailMode,
+      settings.summaryHistoryRounds,
+      settings.includeOutcomeInSummary
+    );
+
+    if (summaryToInject) {
+      const latestRoundId = history.length > 0 ? history[history.length - 1].roundId : "none";
+      meta.outboundSummary = {
+        userMsgId: currentUserId,
+        roundId: latestRoundId,
+        summaryText: summaryToInject,
+      };
+      const currentChars = summaryToInject.length;
+      console.info(
+        `[骰子插件] DICE_ROUND_SUMMARY chars=${currentChars} detail=${settings.summaryDetailMode} rounds=${settings.summaryHistoryRounds} includeOutcome=${settings.includeOutcomeInSummary} format=nl-v4`
+      );
+      changed = true;
+    } else if (meta.outboundSummary) {
       delete meta.outboundSummary;
       changed = true;
     }
@@ -1373,6 +1661,74 @@ function normalizeCompareOperatorEvent(raw: any): CompareOperatorEvent | null {
 
 function normalizeStringFieldEvent(raw: any): string {
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+function normalizeOutcomeTextEvent(
+  raw: any,
+  fieldName: "success" | "failure" | "explode",
+  eventId: string
+): string | undefined {
+  const text = normalizeStringFieldEvent(raw);
+  if (!text) return undefined;
+  if (text.length <= OUTCOME_TEXT_MAX_LEN_Event) return text;
+  const truncated = text.slice(0, OUTCOME_TEXT_MAX_LEN_Event);
+  console.warn(
+    `[骰子插件] outcomes.${fieldName} 过长，已截断: event=${eventId} len=${text.length}`
+  );
+  return `${truncated}（已截断）`;
+}
+
+function normalizeOutcomesEvent(raw: any, eventId: string): EventOutcomesEvent | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const success = normalizeOutcomeTextEvent((raw as any).success, "success", eventId);
+  const failure = normalizeOutcomeTextEvent((raw as any).failure, "failure", eventId);
+  const explode = normalizeOutcomeTextEvent((raw as any).explode, "explode", eventId);
+  if (!success && !failure && !explode) return undefined;
+  return { success, failure, explode };
+}
+
+type ResolvedOutcomeEvent = {
+  kind: EventOutcomeKindEvent;
+  text: string;
+  explosionTriggered: boolean;
+};
+
+function resolveTriggeredOutcomeEvent(
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent | null | undefined,
+  settings: DicePluginSettingsEvent
+): ResolvedOutcomeEvent {
+  if (!settings.enableOutcomeBranches) {
+    return { kind: "none", text: "走向分支已关闭。", explosionTriggered: false };
+  }
+
+  const outcomes = event.outcomes;
+  const explosionTriggered = Boolean(record?.result?.explosionTriggered);
+  if (
+    settings.enableExplodeOutcomeBranch &&
+    explosionTriggered &&
+    outcomes?.explode &&
+    outcomes.explode.trim()
+  ) {
+    return { kind: "explode", text: outcomes.explode.trim(), explosionTriggered: true };
+  }
+
+  if (record?.success === true) {
+    return {
+      kind: "success",
+      text: outcomes?.success?.trim() || "判定成功，剧情向有利方向推进。",
+      explosionTriggered,
+    };
+  }
+  if (record?.success === false || record?.source === "timeout_auto_fail") {
+    return {
+      kind: "failure",
+      text: outcomes?.failure?.trim() || "判定失败，剧情向不利方向推进。",
+      explosionTriggered,
+    };
+  }
+
+  return { kind: "none", text: "尚未结算。", explosionTriggered };
 }
 
 function parseIsoDurationToMsEvent(raw: string): number | null {
@@ -1562,6 +1918,18 @@ function normalizeEventScopeTagEvent(raw: any): EventScopeTagEvent | undefined {
   return undefined;
 }
 
+function normalizeEventRollModeEvent(raw: any): EventRollModeEvent | undefined {
+  const value = normalizeStringFieldEvent(raw).toLowerCase();
+  if (!value) return undefined;
+  if (value === "auto" || value === "automatic" || value === "system" || value === "ai") {
+    return "auto";
+  }
+  if (value === "manual" || value === "user" || value === "player") {
+    return "manual";
+  }
+  return undefined;
+}
+
 function isLikelyProtagonistActionEvent(event: DiceEventSpecEvent): boolean {
   if (event.scope === "protagonist" || event.scope === "all") return true;
   if (event.scope === "character") return false;
@@ -1590,7 +1958,18 @@ function normalizeEventSpecEvent(raw: any): DiceEventSpecEvent | null {
   const desc = normalizeStringFieldEvent(raw.desc);
   const compare = normalizeCompareOperatorEvent(raw.compare);
   const scope = normalizeEventScopeTagEvent(raw.scope ?? raw.eventScope ?? raw.applyTo);
+  const rollMode = normalizeEventRollModeEvent(raw.rollMode);
   const dc = Number(raw.dc);
+  const aliasOutcomes = {
+    success: raw.successOutcome,
+    failure: raw.failureOutcome,
+    explode: raw.explodeOutcome,
+  };
+  const outcomesRaw =
+    raw.outcomes && typeof raw.outcomes === "object"
+      ? { ...aliasOutcomes, ...(raw.outcomes as Record<string, any>) }
+      : aliasOutcomes;
+  const outcomes = normalizeOutcomesEvent(outcomesRaw, id || "unknown_event");
   const rawTimeLimitMs = parseIsoDurationToMsEvent(timeLimitRaw);
   const settings = getSettingsEvent();
   const timeLimitMs = applyTimeLimitPolicyMsEvent(rawTimeLimitMs, settings);
@@ -1613,10 +1992,12 @@ function normalizeEventSpecEvent(raw: any): DiceEventSpecEvent | null {
     dc,
     compare,
     scope,
+    rollMode,
     skill,
     timeLimitMs,
     timeLimit,
     desc,
+    outcomes,
   };
 }
 
@@ -1850,7 +2231,8 @@ function removeRangesEvent(text: string, ranges: RemovalRangeEvent[]): string {
 }
 
 function ensureOpenPendingRoundEvent(meta: DiceMetaEvent): PendingRoundEvent {
-  if (!meta.pendingRound || meta.pendingRound.status !== "open") {
+  const status = (meta.pendingRound as any)?.status;
+  if (!meta.pendingRound || status !== "open") {
     meta.pendingRound = {
       roundId: createIdEvent("round"),
       status: "open",
@@ -1919,7 +2301,7 @@ function sweepTimeoutFailuresEvent(): boolean {
 
   const meta = getDiceMetaEvent();
   const round = meta.pendingRound;
-  if (!round || round.status !== "open") return false;
+  if (!round) return false;
 
   ensureRoundEventTimersSyncedEvent(round);
   const now = Date.now();
@@ -1992,13 +2374,38 @@ function mergeEventsIntoPendingRoundEvent(
   return round;
 }
 
-function formatRollRecordSummaryEvent(record: EventRollRecordEvent): string {
+function formatRollRecordSummaryEvent(
+  record: EventRollRecordEvent,
+  event?: DiceEventSpecEvent
+): string {
+  const settings = getSettingsEvent();
+  let outcomeTag = "";
+  if (settings.enableOutcomeBranches) {
+    const resolved = event
+      ? resolveTriggeredOutcomeEvent(event, record, settings)
+      : record.result.explosionTriggered && settings.enableExplodeOutcomeBranch
+      ? { kind: "explode" as EventOutcomeKindEvent }
+      : record.success === true
+      ? { kind: "success" as EventOutcomeKindEvent }
+      : record.success === false
+      ? { kind: "failure" as EventOutcomeKindEvent }
+      : { kind: "none" as EventOutcomeKindEvent };
+    if (resolved.kind !== "none") {
+      outcomeTag = ` | 走向:${resolved.kind}`;
+    }
+  }
+
   if (record.source === "timeout_auto_fail") {
-    return "超时自动判定失败";
+    return `超时自动判定失败${outcomeTag}`;
+  }
+  if (record.source === "ai_auto_roll") {
+    const status =
+      record.success === null ? "未判定" : record.success ? "成功" : "失败";
+    return `AI自动检定，总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${outcomeTag}`;
   }
   const status =
     record.success === null ? "未判定" : record.success ? "成功" : "失败";
-  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})`;
+  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${outcomeTag}`;
 }
 
 type EventRuntimeToneEvent = "neutral" | "warn" | "danger" | "success";
@@ -2111,7 +2518,7 @@ function refreshCountdownDomEvent(): void {
 
   const meta = getDiceMetaEvent();
   const round = meta.pendingRound;
-  if (!round || round.status !== "open") {
+  if (!round) {
     for (const button of buttons) {
       button.disabled = true;
       button.style.display = "none";
@@ -2195,6 +2602,49 @@ function sanitizeCurrentChatEventBlocksEvent(): void {
   hideEventCodeBlocksInDomEvent();
 }
 
+function buildOutcomePreviewHtmlEvent(
+  event: DiceEventSpecEvent,
+  settings: DicePluginSettingsEvent
+): string {
+  if (!settings.enableOutcomeBranches || !settings.showOutcomePreviewInListCard) return "";
+  const success = event.outcomes?.success?.trim() || "未设置";
+  const failure = event.outcomes?.failure?.trim() || "未设置";
+  const explode =
+    settings.enableExplodeOutcomeBranch
+      ? event.outcomes?.explode?.trim() || "未设置"
+      : "已关闭";
+      
+  return `
+    <div style="margin-top:8px; margin-bottom:12px; padding:12px; border:1px solid rgba(197,160,89,0.3); border-radius:6px; background:linear-gradient(135deg, rgba(30,30,30,0.6) 0%, rgba(15,15,15,0.8) 100%); font-size:12px; line-height:1.6; box-shadow:inset 0 1px 4px rgba(0,0,0,0.5);">
+      <div style="margin-bottom:10px; font-weight:600; color:#d1b67f; font-size:11px; letter-spacing:1px; display:flex; align-items:center;">
+        <span style="flex-grow:1; height:1px; background:linear-gradient(90deg, transparent, rgba(197,160,89,0.4)); margin-right:8px;"></span>
+        ✦ 走向预览 ✦
+        <span style="margin-left:8px; flex-grow:1; height:1px; background:linear-gradient(270deg, transparent, rgba(197,160,89,0.4));"></span>
+      </div>
+      <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(82,196,26,0.15); border:1px solid rgba(82,196,26,0.4); border-radius:4px; color:#73d13d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(82,196,26,0.1);">SUCCESS</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(success)}</span>
+      </div>
+      <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(255,77,79,0.15); border:1px solid rgba(255,77,79,0.4); border-radius:4px; color:#ff7875; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(255,77,79,0.1);">FAILURE</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(failure)}</span>
+      </div>
+      <div style="display:flex; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(250,173,20,0.15); border:1px solid rgba(250,173,20,0.4); border-radius:4px; color:#ffc53d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(250,173,20,0.1);">EXPLODE</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(explode)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function outcomeKindLabelEvent(kind: EventOutcomeKindEvent): string {
+  if (kind === "explode") return "爆骰走向";
+  if (kind === "success") return "成功走向";
+  if (kind === "failure") return "失败走向";
+  return "剧情走向";
+}
+
+
 function buildEventListCardEvent(round: PendingRoundEvent): string {
   const settings = getSettingsEvent();
   ensureRoundEventTimersSyncedEvent(round);
@@ -2206,15 +2656,17 @@ function buildEventListCardEvent(round: PendingRoundEvent): string {
       const runtimeStyle = getRuntimeToneStyleEvent(runtime.tone);
       
       // 使用符号替代 Emoji
-      const rolledPrefix = lastRecord?.source === "timeout_auto_fail" 
-        ? "<span style='color:#ff4d4f;font-weight:bold;'>[×]</span>" 
-        : "<span style='color:#52c41a;font-weight:bold;'>[✓]</span>";
+      const rolledPrefix = buildEventRolledPrefixTemplateEvent(
+        lastRecord?.source === "timeout_auto_fail"
+      );
         
       const rolledBlock = lastRecord
-        ? `<div style="margin-top:10px;padding:8px;border:1px solid rgba(82, 196, 26, 0.3);background:rgba(20, 35, 20, 0.6);font-size:12px;color:#a0d9a0;text-align:center;letter-spacing:0.5px;">
-            ${rolledPrefix} 已结：${escapeHtmlEvent(formatRollRecordSummaryEvent(lastRecord))}
-          </div>`
+        ? buildEventRolledBlockTemplateEvent(
+            rolledPrefix,
+            escapeHtmlEvent(formatRollRecordSummaryEvent(lastRecord, event))
+          )
         : "";
+      const outcomePreviewHtml = buildOutcomePreviewHtmlEvent(event, settings);
         
       const deadlineAttr =
         typeof event.deadlineAt === "number" && Number.isFinite(event.deadlineAt)
@@ -2231,54 +2683,41 @@ function buildEventListCardEvent(round: PendingRoundEvent): string {
           : "none"
         : "off";
 
-      return `
-      <li style="position:relative;list-style:none;margin-bottom:16px;border:1px solid rgba(197,160,89,0.3);border-left:3px solid #c5a059;padding:14px;background:linear-gradient(135deg, rgba(30,20,18,0.8), rgba(15,10,10,0.9));box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-          <div style="font-weight:bold;color:#ffdfa3;font-size:15px;font-family:'Georgia', serif;letter-spacing:1px;">
-            ✦ ${escapeHtmlEvent(event.title)}
-          </div>
-          <div style="font-size:11px;font-family:monospace;color:#8c7b60;background:rgba(0,0,0,0.5);border:1px solid rgba(197,160,89,0.2);padding:2px 6px;">
-            ID:${escapeHtmlEvent(event.id)}
-          </div>
-        </div>
-        
-        <div style="font-size:13px;line-height:1.6;color:#d1c5a5;opacity:0.9;margin-bottom:12px;">
-          ${escapeHtmlEvent(event.desc)}
-        </div>
-        
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;justify-content:center;text-align:center;">
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">技能 <span style="color:#fff;">${escapeHtmlEvent(event.skill)}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">骰式 <span style="color:#ffdfa3;">${escapeHtmlEvent(event.checkDice)}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">判定 <span style="color:#ffbbbb;">${escapeHtmlEvent(compare)} ${event.dc}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">时限 <span style="color:#a0d9a0;">${escapeHtmlEvent(timeLimitLabel)}</span></span>
-        </div>
-        
-        <div data-dice-countdown="1" data-round-id="${escapeAttrEvent(round.roundId)}" data-event-id="${escapeAttrEvent(event.id)}" data-deadline-at="${escapeAttrEvent(deadlineAttr)}" style="display:inline-block;padding:4px 10px;font-size:11px;font-family:monospace;border:${runtimeStyle.border};background:${runtimeStyle.background};color:${runtimeStyle.color};letter-spacing:1px;margin-bottom:4px;">
-          STATUS: ${escapeHtmlEvent(runtime.text)}
-        </div>
-        
-        ${rolledBlock}
-        
-        <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;border-top:1px dashed rgba(197,160,89,0.2);padding-top:12px;">
-          <code style="font-size:11px;color:#8c7b60;background:none;padding:0;">/eventroll roll ${escapeHtmlEvent(event.id)}</code>
-          ${showRollButton
-            ? `<button type="button" data-dice-event-roll="1" data-round-id="${escapeAttrEvent(round.roundId)}" data-dice-event-id="${escapeAttrEvent(event.id)}" data-dice-expr="${escapeAttrEvent(event.checkDice)}" ${buttonDisabled} style="border:1px solid #c5a059;background:linear-gradient(135deg,#3a2515,#1a100a);color:#ffdfa3;padding:6px 16px;font-family:'Georgia', serif;font-weight:bold;font-size:12px;letter-spacing:1px;text-transform:uppercase;transition:all 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.5);${buttonStateStyle}">
-            执行检定
-          </button>`
-            : ""}
-        </div>
-      </li>`;
+      const rollButtonHtml = showRollButton
+        ? buildEventRollButtonTemplateEvent({
+            roundIdAttr: escapeAttrEvent(round.roundId),
+            eventIdAttr: escapeAttrEvent(event.id),
+            diceExprAttr: escapeAttrEvent(event.checkDice),
+            buttonDisabledAttr: buttonDisabled,
+            buttonStateStyle,
+          })
+        : "";
+
+      return buildEventListItemTemplateEvent({
+        titleHtml: escapeHtmlEvent(event.title),
+        eventIdHtml: escapeHtmlEvent(event.id),
+        descHtml: escapeHtmlEvent(event.desc),
+        skillHtml: escapeHtmlEvent(event.skill),
+        checkDiceHtml: escapeHtmlEvent(event.checkDice),
+        compareHtml: escapeHtmlEvent(compare),
+        dcText: String(event.dc),
+        timeLimitHtml: escapeHtmlEvent(timeLimitLabel),
+        roundIdAttr: escapeAttrEvent(round.roundId),
+        eventIdAttr: escapeAttrEvent(event.id),
+        deadlineAttr: escapeAttrEvent(deadlineAttr),
+        runtimeTextHtml: escapeHtmlEvent(runtime.text),
+        runtimeBorder: runtimeStyle.border,
+        runtimeBackground: runtimeStyle.background,
+        runtimeColor: runtimeStyle.color,
+        rolledBlockHtml: rolledBlock,
+        outcomePreviewHtml,
+        commandTextHtml: `/eventroll roll ${escapeHtmlEvent(event.id)}`,
+        rollButtonHtml,
+      });
     })
     .join("");
 
-  return `
-  <div style="border:1px solid #8c7b60;background:linear-gradient(145deg,#1c1412 0%,#0d0806 100%);padding:16px;color:#d1c5a5;box-shadow:0 8px 24px rgba(0,0,0,0.4), inset 0 0 30px rgba(0,0,0,0.6);font-family:sans-serif;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;border-bottom:1px solid #4a3b2c;padding-bottom:10px;">
-      <strong style="color:#e8dcb5;font-size:16px;font-family:'Georgia', serif;letter-spacing:2px;">❖ 本轮可用事件 ❖</strong>
-      <span style="font-size:11px;color:#6b5a45;font-family:monospace;">ROUND: ${escapeHtmlEvent(round.roundId)}</span>
-    </div>
-    <ul style="padding:0;margin:0;">${items}</ul>
-  </div>`;
+  return buildEventListCardTemplateEvent(escapeHtmlEvent(round.roundId), items);
 }
 
 function evaluateSuccessEvent(
@@ -2301,250 +2740,156 @@ function evaluateSuccessEvent(
   }
 }
 
+function buildAnimatedDiceVisualBlockEvent(
+  result: DiceResult | null | undefined,
+  compactMode = false
+): string {
+  if (!result || !Array.isArray(result.rolls) || result.rolls.length === 0) {
+    return "";
+  }
+
+  const uniqueId = "d" + Math.random().toString(36).substr(2, 9);
+  let critType: "success" | "fail" | "normal" = "normal";
+  let critText = "";
+  let resultColor = "#ffdb78";
+
+  if (result.count === 1) {
+    const val = result.rolls[0];
+    const maxVal = result.sides;
+    if (val === maxVal) {
+      critType = "success";
+      critText = "大成功!";
+      resultColor = "#52c41a";
+    } else if (val === 1) {
+      critType = "fail";
+      critText = "大失败!";
+      resultColor = "#ff4d4f";
+    }
+  }
+
+  const showDiceSvgs = result.rolls.length <= 5;
+  const diceSize = compactMode ? 62 : 68;
+  const rollingSize = compactMode ? 52 : 58;
+  const diceVisuals = showDiceSvgs
+    ? result.rolls
+        .map((r) => getDiceSvg(r, result.sides, resultColor, diceSize))
+        .join(" ")
+    : getDiceSvg(0, result.sides, resultColor, diceSize);
+  const rollingVisual = getRollingSvg("#ffdb78", rollingSize);
+
+  return buildAlreadyRolledDiceVisualTemplateEvent({
+    uniqueId,
+    rollingVisualHtml: rollingVisual,
+    diceVisualsHtml: diceVisuals,
+    critType,
+    critText,
+    compactMode,
+  });
+}
+
 function buildEventRollResultCardEvent(
   event: DiceEventSpecEvent,
   record: EventRollRecordEvent
 ): string {
+  const settings = getSettingsEvent();
+  const resolvedOutcome = resolveTriggeredOutcomeEvent(event, record, settings);
+  const outcomeLabel = settings.enableOutcomeBranches
+    ? outcomeKindLabelEvent(resolvedOutcome.kind)
+    : "剧情走向";
+  const outcomeText = settings.enableOutcomeBranches
+    ? resolvedOutcome.text
+    : "走向分支已关闭。";
   const status =
     record.success === null ? "PENDING" : record.success ? "判定成功" : "判定失败";
   const statusColor =
     record.success === null ? "#ffdb78" : record.success ? "#52c41a" : "#ff4d4f";
 
-  const sourceText = record.source === "timeout_auto_fail" ? "超时自动检定" : "主动检定";
-  
-  return `
-  <div style="border:1px solid #8c7b60;background:linear-gradient(145deg,#1c1412 0%,#0d0806 100%);padding:16px;color:#d1c5a5;box-shadow:0 8px 24px rgba(0,0,0,0.4), inset 0 0 30px rgba(0,0,0,0.6);">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;border-bottom:1px solid #4a3b2c;padding-bottom:10px;">
-      <strong style="color:#e8dcb5;font-size:15px;font-family:'Georgia', serif;letter-spacing:1px;">❖ 检定结算报告 ❖</strong>
-      <span style="font-size:11px;color:#6b5a45;font-family:monospace;">${escapeHtmlEvent(record.rollId)}</span>
-    </div>
-    
-    <div style="margin-bottom:12px;font-weight:bold;font-size:16px;color:#ffdfa3;font-family:'Georgia', serif;">
-      ${escapeHtmlEvent(event.title)}
-    </div>
-    
-    <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px;line-height:1.4;opacity:0.9;background:rgba(0,0,0,0.3);padding:10px;border:1px solid rgba(197,160,89,0.15);">
-      <div style="color:#8c7b60;text-align:right;">事件 ID</div>
-      <div style="font-family:monospace;">${escapeHtmlEvent(event.id)}</div>
-      
-      <div style="color:#8c7b60;text-align:right;">判定来源</div>
-      <div>${escapeHtmlEvent(sourceText)}</div>
-      
-      <div style="color:#8c7b60;text-align:right;">检定技能</div>
-      <div style="color:#fff;">${escapeHtmlEvent(event.skill)}</div>
-      
-      <div style="color:#8c7b60;text-align:right;">检定方式</div>
-      <div style="font-family:monospace;color:#ffdfa3;">${escapeHtmlEvent(record.diceExpr)}</div>
-      
-      <div style="color:#8c7b60;text-align:right;">原始点数</div>
-      <div style="font-family:monospace;">[${escapeHtmlEvent(record.result.rolls.join(", "))}] <span style="color:#8c7b60;">|</span> 修正 ${escapeHtmlEvent(formatModifier(record.result.modifier))}</div>
-    </div>
-    
-    <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.1));padding:12px;border-left:3px solid ${statusColor};">
-      <div>
-        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">最终结果</div>
-        <div style="font-size:32px;line-height:1;font-weight:bold;color:#fff;font-family:'Georgia', serif;">${record.result.total}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:11px;color:#8c7b60;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">系统判定</div>
-        <div style="font-size:13px;font-family:monospace;margin-bottom:2px;">条件: ${escapeHtmlEvent(record.compareUsed)} ${record.dcUsed ?? "N/A"}</div>
-        <div style="font-weight:bold;font-size:16px;color:${statusColor};letter-spacing:1px;">[ ${status} ]</div>
-      </div>
-    </div>
-    
-    <div style="margin-top:12px;font-size:11px;color:#6b5a45;text-align:right;font-family:monospace;">
-      TIME LIMIT: ${escapeHtmlEvent(event.timeLimit ?? "NONE")}
-    </div>
-  </div>`;
+  const sourceText =
+    record.source === "timeout_auto_fail"
+      ? "超时自动检定"
+      : record.source === "ai_auto_roll"
+      ? "AI 自动检定"
+      : "主动检定";
+  const diceVisualBlock =
+    record.source === "timeout_auto_fail"
+      ? ""
+      : buildAnimatedDiceVisualBlockEvent(record.result, true);
+
+  return buildEventRollResultCardTemplateEvent({
+    rollIdHtml: escapeHtmlEvent(record.rollId),
+    titleHtml: escapeHtmlEvent(event.title),
+    eventIdHtml: escapeHtmlEvent(event.id),
+    sourceHtml: escapeHtmlEvent(sourceText),
+    skillHtml: escapeHtmlEvent(event.skill),
+    diceExprHtml: escapeHtmlEvent(record.diceExpr),
+    rollsSummaryHtml: buildRollsSummaryTemplateEvent(
+      escapeHtmlEvent(record.result.rolls.join(", ")),
+      escapeHtmlEvent(formatModifier(record.result.modifier))
+    ),
+    compareHtml: escapeHtmlEvent(record.compareUsed),
+    dcText: String(record.dcUsed ?? "N/A"),
+    statusText: status,
+    statusColor,
+    totalText: String(record.result.total),
+    timeLimitHtml: escapeHtmlEvent(event.timeLimit ?? "NONE"),
+    diceVisualBlockHtml: diceVisualBlock,
+    outcomeLabelHtml: escapeHtmlEvent(outcomeLabel),
+    outcomeTextHtml: escapeHtmlEvent(outcomeText),
+  });
 }
 
 function buildEventAlreadyRolledCardEvent(
   event: DiceEventSpecEvent,
   record: EventRollRecordEvent
 ): string {
+  const settings = getSettingsEvent();
+  const resolvedOutcome = resolveTriggeredOutcomeEvent(event, record, settings);
+  const outcomeLabel = settings.enableOutcomeBranches
+    ? outcomeKindLabelEvent(resolvedOutcome.kind)
+    : "剧情走向";
+  const outcomeText = settings.enableOutcomeBranches
+    ? resolvedOutcome.text
+    : "走向分支已关闭。";
   const isTimeout = record.source === "timeout_auto_fail";
   const titleText = isTimeout ? "✦ 事件已超时 ✦" : "✦ 检定已完成 ✦";
-  const sourceText = isTimeout ? "系统强制结算" : "玩家主动检定";
+  const sourceText = isTimeout
+    ? "系统强制结算"
+    : record.source === "ai_auto_roll"
+    ? "AI 自动检定"
+    : "玩家主动检定";
   const statusText = record.success === null ? "未决" : record.success ? "成功" : "失败";
   const statusColor = record.success === null ? "#a3957a" : record.success ? "#52c41a" : "#ff4d4f";
 
-  // === 融合 buildResultMessage 的动画与 SVG 逻辑 ===
-  let diceVisualBlock = "";
-  
-  // 只有在非超时（有实际掷骰结果）的情况下才渲染动画
-  if (!isTimeout && record.result) {
-    const result = record.result;
-    const uniqueId = "d" + Math.random().toString(36).substr(2, 9);
-    
-    let critType = 'normal';
-    let critText = '';
-    let resultColor = '#ffdb78'; // 默认亮金色
-    let resultGlow = '0 2px 4px rgba(0,0,0,0.5)';
+  const diceVisualBlock = isTimeout ? "" : buildAnimatedDiceVisualBlockEvent(record.result);
 
-    // 判断大成功/大失败 (仅单骰子时)
-    if (result.count === 1) {
-      const val = result.rolls[0];
-      const maxVal = result.sides;
-      if (val === maxVal) {
-        critType = 'success';
-        critText = '大成功!';
-        resultColor = '#52c41a'; // 成功绿
-        resultGlow = '0 0 15px rgba(82, 196, 26, 0.8)';
-      } else if (val === 1) {
-        critType = 'fail';
-        critText = '大失败!';
-        resultColor = '#ff4d4f'; // 失败红
-        resultGlow = '0 0 15px rgba(255, 77, 79, 0.8)';
-      }
-    }
+  const distributionBlock = !isTimeout && record.result
+    ? buildEventDistributionBlockTemplateEvent(
+        escapeHtmlEvent(record.result.rolls.join(", ")),
+        escapeHtmlEvent(formatModifier(record.result.modifier))
+      )
+    : "";
+  const timeoutBlock = record.timeoutAt
+    ? buildEventTimeoutAtBlockTemplateEvent(
+        escapeHtmlEvent(new Date(record.timeoutAt).toISOString())
+      )
+    : "";
 
-    const showDiceSvgs = result.rolls.length <= 5;
-    let diceVisuals = "";
-    if (showDiceSvgs) {
-      diceVisuals = result.rolls.map(r => getDiceSvg(r, result.sides, resultColor)).join(" ");
-    } else {
-      diceVisuals = getDiceSvg(0, result.sides, resultColor);
-    }
-
-    const rollingVisual = getRollingSvg('#ffdb78');
-
-    diceVisualBlock = `
-    <style>
-      @keyframes spin-3d-${uniqueId} {
-        0% { transform: rotateX(0deg) rotateY(0deg); }
-        100% { transform: rotateX(360deg) rotateY(360deg); }
-      }
-      @keyframes fade-out-${uniqueId} {
-        0% { opacity: 1; }
-        90% { opacity: 0; }
-        100% { opacity: 0; display: none; }
-      }
-      @keyframes fade-in-${uniqueId} {
-        0% { opacity: 0; transform: scale(0.8); }
-        100% { opacity: 1; transform: scale(1); }
-      }
-      @keyframes pulse-crit-${uniqueId} {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-      }
-      @keyframes shake-crit-${uniqueId} {
-        0% { transform: translate(1px, 1px) rotate(0deg); }
-        10% { transform: translate(-1px, -2px) rotate(-1deg); }
-        20% { transform: translate(-3px, 0px) rotate(1deg); }
-        30% { transform: translate(3px, 2px) rotate(0deg); }
-        40% { transform: translate(1px, -1px) rotate(1deg); }
-        50% { transform: translate(-1px, 2px) rotate(-1deg); }
-        60% { transform: translate(-3px, 1px) rotate(0deg); }
-        70% { transform: translate(3px, 1px) rotate(-1deg); }
-        80% { transform: translate(-1px, -1px) rotate(1deg); }
-        90% { transform: translate(1px, 2px) rotate(0deg); }
-        100% { transform: translate(1px, -2px) rotate(-1deg); }
-      }
-      
-      .dice-wrapper-${uniqueId} {
-        position: relative;
-        min-height: 90px;
-        padding: 12px 0;
-        margin-top: 12px;
-        background: rgba(0,0,0,0.2);
-        border-radius: 6px;
-        border: 1px solid rgba(197,160,89,0.15);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-      
-      .dice-rolling-${uniqueId} {
-        position: absolute;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        animation: fade-out-${uniqueId} 0.2s forwards 1.2s;
-        z-index: 10;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-      
-      .dice-rolling-${uniqueId} .cube {
-        animation: spin-3d-${uniqueId} 1.5s linear infinite;
-      }
-
-      .dice-result-${uniqueId} {
-        opacity: 0;
-        animation: fade-in-${uniqueId} 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 1.3s;
-        text-align: center;
-        width: 100%;
-      }
-
-      .crit-success-${uniqueId} {
-        animation: pulse-crit-${uniqueId} 1s infinite;
-        color: #52c41a;
-        font-weight: bold;
-        margin-bottom: 8px;
-        text-shadow: 0 0 10px rgba(82, 196, 26, 0.5);
-      }
-
-      .crit-fail-${uniqueId} {
-        animation: shake-crit-${uniqueId} 0.5s;
-        color: #ff4d4f;
-        font-weight: bold;
-        margin-bottom: 8px;
-        text-shadow: 0 0 10px rgba(255, 77, 79, 0.5);
-      }
-    </style>
-    
-    <div class="dice-wrapper-${uniqueId}">
-        <div class="dice-rolling-${uniqueId}">
-            ${rollingVisual}
-        </div>
-
-        <div class="dice-result-${uniqueId}">
-            ${critText ? `<div class="${critType === 'success' ? `crit-success-${uniqueId}` : `crit-fail-${uniqueId}`}">${critText}</div>` : ''}
-            
-            <div style="margin-bottom: 8px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                ${diceVisuals}
-            </div>
-
-            <div style="font-size: 28px; font-weight: bold; font-family: 'Georgia', serif; color: ${resultColor}; text-shadow: ${resultGlow}; line-height: 1;">
-                ${result.total}
-            </div>
-        </div>
-    </div>
-    `;
-  }
-
-  return `
-  <div style="border:1px solid #5a4b3c;background:linear-gradient(135deg,#241c18 0%,#171210 100%);padding:14px;color:#b3a58b;box-shadow:inset 0 0 20px rgba(0,0,0,0.5);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px dashed #4a3b2c;padding-bottom:8px;">
-      <strong style="color:#d1c5a5;font-size:14px;letter-spacing:1px;">${titleText}</strong>
-      <span style="font-size:11px;opacity:0.6;font-family:monospace;">${escapeHtmlEvent(record.rollId)}</span>
-    </div>
-    
-    <div style="font-size:13px;line-height:1.6;display:flex;flex-direction:column;gap:4px;">
-      <div><span style="color:#8c7b60;">目标事件：</span> <strong style="color:#d1c5a5;">${escapeHtmlEvent(event.title)}</strong> <code style="font-size:11px;color:#6b5a45;">(${escapeHtmlEvent(event.id)})</code></div>
-      <div><span style="color:#8c7b60;">判定来源：</span> ${escapeHtmlEvent(sourceText)}</div>
-      
-      <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(0,0,0,0.3);">
-        <span style="color:#8c7b60;">判定条件：</span> 
-        <span style="font-size:12px;color:#d1c5a5;font-family:monospace;">${escapeHtmlEvent(record.compareUsed)} ${record.dcUsed ?? "N/A"}</span>
-        <span style="margin-left:auto;color:${statusColor};font-weight:bold;border:1px solid ${statusColor};padding:2px 6px;font-size:11px;border-radius:2px;">
-          ${statusText}
-        </span>
-      </div>
-
-      ${diceVisualBlock}
-      
-      ${!isTimeout && record.result ? `
-      <div style="font-size:11px;color:#6b5a45;margin-top:6px;text-align:center;background:rgba(0,0,0,0.3);padding:4px;border-radius:4px;">
-        <span style="color:#8c7b60;">点数分布：</span> [${escapeHtmlEvent(record.result.rolls.join(", "))}] <span style="color:#8c7b60;margin:0 4px;">|</span> <span style="color:#8c7b60;">修正</span> ${escapeHtmlEvent(formatModifier(record.result.modifier))}
-      </div>
-      ` : ""}
-      
-      ${record.timeoutAt ? `<div style="font-size:11px;color:#8c7b60;margin-top:6px;font-family:monospace;text-align:right;">截止于: ${escapeHtmlEvent(new Date(record.timeoutAt).toISOString())}</div>` : ""}
-    </div>
-  </div>`;
+  return buildEventAlreadyRolledCardTemplateEvent({
+    titleTextHtml: titleText,
+    rollIdHtml: escapeHtmlEvent(record.rollId),
+    eventTitleHtml: escapeHtmlEvent(event.title),
+    eventIdHtml: escapeHtmlEvent(event.id),
+    sourceTextHtml: escapeHtmlEvent(sourceText),
+    compareHtml: escapeHtmlEvent(record.compareUsed),
+    dcText: String(record.dcUsed ?? "N/A"),
+    statusText,
+    statusColor,
+    diceVisualBlockHtml: diceVisualBlock,
+    distributionBlockHtml: distributionBlock,
+    outcomeLabelHtml: escapeHtmlEvent(outcomeLabel),
+    outcomeTextHtml: escapeHtmlEvent(outcomeText),
+    timeoutBlockHtml: timeoutBlock,
+  });
 }
 function performEventRollByIdEvent(
   eventIdRaw: string,
@@ -2559,7 +2904,7 @@ function performEventRollByIdEvent(
 
   const meta = getDiceMetaEvent();
   const round = meta.pendingRound;
-  if (!round || round.status !== "open") {
+  if (!round) {
     return "❌ 当前没有可投掷的事件。";
   }
   if (expectedRoundId && round.roundId !== expectedRoundId) {
@@ -2624,6 +2969,68 @@ function performEventRollByIdEvent(
   const message = buildEventRollResultCardEvent(event, record);
   const fallback = pushToChat(message);
   return fallback ?? "";
+}
+
+function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
+  const settings = getSettingsEvent();
+  if (!settings.enableAiRollMode) return [];
+
+  ensureRoundEventTimersSyncedEvent(round);
+
+  let changed = false;
+  let lastResult: DiceResult | null = null;
+  const resultCards: string[] = [];
+
+  for (const event of round.events) {
+    const mode: EventRollModeEvent = event.rollMode === "auto" ? "auto" : "manual";
+    if (mode !== "auto") continue;
+
+    const existingRecord = getLatestRollRecordForEvent(round, event.id);
+    if (existingRecord) continue;
+
+    const expr = String(event.checkDice || "").trim();
+    if (!expr) continue;
+
+    let result: DiceResult;
+    try {
+      result = rollExpression(expr);
+    } catch (error) {
+      console.warn(`[骰子插件] AI 自动投骰失败: event=${event.id}`, error);
+      continue;
+    }
+
+    const compareUsed = normalizeCompareOperatorEvent(event.compare) ?? ">=";
+    const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
+    const success = evaluateSuccessEvent(result.total, compareUsed, dcUsed);
+    const record: EventRollRecordEvent = {
+      rollId: createIdEvent("eroll"),
+      roundId: round.roundId,
+      eventId: event.id,
+      eventTitle: event.title,
+      diceExpr: expr,
+      result,
+      success,
+      compareUsed,
+      dcUsed,
+      rolledAt: Date.now(),
+      source: "ai_auto_roll",
+      timeoutAt: null,
+    };
+
+    round.rolls.push(record);
+    changed = true;
+    lastResult = result;
+    resultCards.push(buildEventRollResultCardEvent(event, record));
+  }
+
+  if (!changed) return [];
+
+  if (lastResult) {
+    saveLastRoll(lastResult);
+  } else {
+    saveMetadataSafeEvent();
+  }
+  return resultCards;
 }
 
 function bindEventButtonsEvent(): void {
@@ -2728,8 +3135,12 @@ function handleGenerationEndedEvent(retry = 0): void {
 
   if (events.length > 0) {
     const round = mergeEventsIntoPendingRoundEvent(events, assistantMsgId);
+    const autoRollCards = autoRollEventsByAiModeEvent(round);
     const eventCard = buildEventListCardEvent(round);
     pushToChat(eventCard);
+    for (const card of autoRollCards) {
+      pushToChat(card);
+    }
     sweepTimeoutFailuresEvent();
     refreshCountdownDomEvent();
   } else {
@@ -2760,6 +3171,7 @@ function clearDiceMetaEventState(reason = "chat_reset"): void {
 
   delete meta.pendingRound;
   delete meta.outboundSummary;
+  delete meta.summaryHistory;
   delete meta.lastPromptUserMsgId;
   delete meta.lastProcessedAssistantMsgId;
   saveMetadataSafeEvent();
@@ -2767,16 +3179,7 @@ function clearDiceMetaEventState(reason = "chat_reset"): void {
 }
 
 function buildEventRollHelpMessageEvent(): string {
-  return `
-  <div>
-    <div><strong>/eventroll 命令帮助</strong></div>
-    <ul>
-      <li><code>/eventroll list</code>：列出当前轮次事件</li>
-      <li><code>/eventroll roll &lt;eventId&gt;</code>：对指定事件投骰</li>
-      <li><code>/eventroll roll &lt;eventId&gt; &lt;diceExpr&gt;</code>：覆盖默认骰式</li>
-      <li><code>/eventroll help</code>：显示帮助</li>
-    </ul>
-  </div>`;
+  return buildEventRollHelpTemplateEvent();
 }
 
 function buildEventListTextEvent(round: PendingRoundEvent): string {
@@ -2787,7 +3190,7 @@ function buildEventListTextEvent(round: PendingRoundEvent): string {
   for (const event of round.events) {
     const state = getEventRuntimeViewStateEvent(round, event);
     lines.push(
-      `- ${event.id}: ${event.title} | ${event.checkDice} | ${event.compare ?? ">="} ${event.dc} | ${event.skill} | timeLimit=${event.timeLimit ?? "none"} | 状态=${state.text}`
+      `- ${event.id}: ${event.title} | ${event.checkDice} | ${event.compare ?? ">="} ${event.dc} | ${event.skill} | rollMode=${event.rollMode ?? "manual"} | timeLimit=${event.timeLimit ?? "none"} | 状态=${state.text}`
     );
   }
   return lines.join("\n");
@@ -2828,13 +3231,15 @@ function registerEventRollCommandEvent(): void {
           sweepTimeoutFailuresEvent();
           const meta = getDiceMetaEvent();
           const round = meta.pendingRound;
-          if (!round || round.status !== "open") {
+          if (!round) {
             const fallback = pushToChat(
               "当前没有可用事件。请等待 AI 输出事件 JSON。"
             );
             return fallback ?? "";
           }
-          const msg = `<pre>${escapeHtmlEvent(buildEventListTextEvent(round))}</pre>`;
+          const msg = buildPreBlockTemplateEvent(
+            escapeHtmlEvent(buildEventListTextEvent(round))
+          );
           const fallback = pushToChat(msg);
           return fallback ?? "";
         }
@@ -2966,9 +3371,11 @@ function registerEventHooksEvent(): void {
 }
 
 function initializeEvent(attempt = 0): void {
+  registerBaseMacrosAndCommandsEvent();
   mountSettingsCardEvent();
   bindEventButtonsEvent();
   registerEventRollCommandEvent();
+  registerDebugCommandEvent();
   registerEventHooksEvent();
   startCountdownTickerEvent();
   sweepTimeoutFailuresEvent();
@@ -2978,6 +3385,8 @@ function initializeEvent(attempt = 0): void {
   const globalRef = globalThis as any;
   if (
     !globalRef.__stRollEventCommandRegisteredEvent ||
+    !globalRef.__stRollBaseCommandRegisteredEvent ||
+    !globalRef.__stRollDebugCommandRegisteredEvent ||
     !globalRef.__stRollEventHooksRegisteredEvent
   ) {
     if (attempt < 80) {
@@ -2989,29 +3398,37 @@ function initializeEvent(attempt = 0): void {
   console.info("[骰子插件] Event 初始化完成");
 }
 
+function registerDebugCommandEvent(): void {
+  const globalRef = globalThis as any;
+  if (globalRef.__stRollDebugCommandRegisteredEvent) return;
+  if (!SlashCommandParser || !SlashCommand) return;
+
+  SlashCommandParser.addCommandObject(
+    SlashCommand.fromProps({
+      name: "rollDebug",
+      aliases: ["ddebug"],
+      returns: "显示 diceRoller 元数据",
+      namedArgumentList: [],
+      unnamedArgumentList: [],
+      callback: () => {
+        const legacy = getDiceMeta();
+        const eventMeta = getDiceMetaEvent();
+        const text = JSON.stringify({ legacy, eventMeta }, null, 2);
+
+        // 直接丢到聊天里
+        const msg = buildDebugTemplateEvent(escapeHtmlEvent(text));
+        pushToChat(msg);
+        return "";
+      },
+    })
+  );
+
+  globalRef.__stRollDebugCommandRegisteredEvent = true;
+}
+
 (function bootstrapEvent() {
   const globalRef = globalThis as any;
   if (globalRef.__stDiceRollerEventLoaded) return;
   globalRef.__stDiceRollerEventLoaded = true;
   initializeEvent();
 })();
-
-SlashCommandParser.addCommandObject(
-  SlashCommand.fromProps({
-    name: "rollDebug",
-    aliases: ["ddebug"],
-    returns: "显示 diceRoller 元数据",
-    namedArgumentList: [],
-    unnamedArgumentList: [],
-    callback: () => {
-      const legacy = getDiceMeta();
-      const eventMeta = getDiceMetaEvent();
-      const text = JSON.stringify({ legacy, eventMeta }, null, 2);
-
-      // 直接丢到聊天里
-      const msg = "骰子DEBUG模式\n" + "<pre>" + escapeHtmlEvent(text) + "</pre>";
-      pushToChat(msg);
-      return "";
-    },
-  })
-);
