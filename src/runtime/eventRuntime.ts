@@ -258,6 +258,75 @@ const refreshSkillDraftDirtyStateEvent = skillEditorRuntimeEvent.refreshSkillDra
 const renderSkillRowsEvent = skillEditorRuntimeEvent.renderSkillRowsEvent;
 const renderSkillValidationErrorsEvent = skillEditorRuntimeEvent.renderSkillValidationErrorsEvent;
 const hydrateSkillDraftFromSettingsEvent = skillEditorRuntimeEvent.hydrateSkillDraftFromSettingsEvent;
+
+/**
+ * 事件掷骰流程共享依赖：供手动掷骰与 AI 自动掷骰模块共用。
+ * 修改这里会同时影响 `performEventRollByIdModuleEvent` 与 `autoRollEventsByAiModeModuleEvent` 的结算行为。
+ */
+const rollDepsEvent = {
+  getSettingsEvent: getSettingsStoreEvent,
+  ensureRoundEventTimersSyncedEvent,
+  getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
+  rollExpression: rollExpressionCoreEvent,
+  resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
+  applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
+  normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
+  evaluateSuccessEvent: evaluateSuccessCoreEvent,
+  createIdEvent: createIdCoreEvent,
+  buildEventRollResultCardEvent,
+  saveLastRoll: saveLastRollStoreEvent,
+  saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
+};
+
+/**
+ * 事件卡片渲染共享依赖：供事件列表卡片与倒计时刷新中的视图读取逻辑共用。
+ * 修改这里会影响 `buildEventListCardModuleEvent` 及所有基于运行时视图状态的事件卡片展示。
+ */
+const cardRenderDepsEvent = {
+  getSettingsEvent: getSettingsStoreEvent,
+  ensureRoundEventTimersSyncedEvent,
+  getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
+  getEventRuntimeViewStateEvent,
+  getRuntimeToneStyleEvent: getRuntimeToneStyleModuleEvent,
+  buildEventRolledPrefixTemplateEvent,
+  buildEventRolledBlockTemplateEvent,
+  formatRollRecordSummaryEvent,
+  parseDiceExpression: parseDiceExpressionCoreEvent,
+  resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
+  formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
+  buildEventRollButtonTemplateEvent,
+  buildEventListItemTemplateEvent,
+  buildEventListCardTemplateEvent,
+  escapeHtmlEvent: escapeHtmlCoreEvent,
+  escapeAttrEvent: escapeAttrCoreEvent,
+};
+
+/**
+ * 事件生命周期 Hook 共享依赖：供生成结束处理与事件块清洗等流程复用。
+ * 修改这里会波及 `handleGenerationEndedModuleEvent` 及相关 Hook 行为（落库、渲染、自动掷骰）。
+ */
+const hooksDepsEvent = {
+  getSettingsEvent: getSettingsStoreEvent,
+  getLiveContextEvent: getLiveContextCoreEvent,
+  findLatestAssistantEvent,
+  getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+  buildAssistantMessageIdEvent,
+  getPreferredAssistantSourceTextEvent: getPreferredAssistantSourceTextModuleEvent,
+  getMessageTextEvent: getMessageTextModuleEvent,
+  parseEventEnvelopesEvent,
+  filterEventsByApplyScopeEvent: filterEventsByApplyScopeModuleEvent,
+  removeRangesEvent,
+  setMessageTextEvent: setMessageTextModuleEvent,
+  hideEventCodeBlocksInDomEvent: hideEventCodeBlocksInDomModuleEvent,
+  persistChatSafeEvent: persistChatSafeStoreEvent,
+  mergeEventsIntoPendingRoundEvent,
+  autoRollEventsByAiModeEvent,
+  buildEventListCardEvent,
+  pushToChat: pushToChatCoreEvent,
+  sweepTimeoutFailuresEvent,
+  refreshCountdownDomEvent,
+  saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
+};
 const confirmDiscardSkillDraftEvent = skillEditorRuntimeEvent.confirmDiscardSkillDraftEvent;
 
 // 此访问器是技能草稿状态唯一入口。
@@ -627,22 +696,7 @@ export function sanitizeCurrentChatEventBlocksEvent(): void {
 
 function buildEventListCardEvent(round: PendingRoundEvent): string {
   return buildEventListCardModuleEvent(round, {
-    getSettingsEvent: getSettingsStoreEvent,
-    ensureRoundEventTimersSyncedEvent,
-    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
-    getEventRuntimeViewStateEvent,
-    getRuntimeToneStyleEvent: getRuntimeToneStyleModuleEvent,
-    buildEventRolledPrefixTemplateEvent,
-    buildEventRolledBlockTemplateEvent,
-    formatRollRecordSummaryEvent,
-    parseDiceExpression: parseDiceExpressionCoreEvent,
-    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
-    formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
-    buildEventRollButtonTemplateEvent,
-    buildEventListItemTemplateEvent,
-    buildEventListCardTemplateEvent,
-    escapeHtmlEvent: escapeHtmlCoreEvent,
-    escapeAttrEvent: escapeAttrCoreEvent,
+    ...cardRenderDepsEvent,
   });
 }
 
@@ -688,41 +742,19 @@ function performEventRollByIdEvent(
   expectedRoundId?: string
 ): string {
   return performEventRollByIdModuleEvent(eventIdRaw, overrideExpr, expectedRoundId, {
+    ...rollDepsEvent,
     sweepTimeoutFailuresEvent,
     getDiceMetaEvent: getDiceMetaStoreMetaEvent,
-    ensureRoundEventTimersSyncedEvent,
     recordTimeoutFailureIfNeededEvent,
-    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
-    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
     buildEventAlreadyRolledCardEvent,
     pushToChat: pushToChatCoreEvent,
     refreshCountdownDomEvent,
-    rollExpression: rollExpressionCoreEvent,
-    getSettingsEvent: getSettingsStoreEvent,
-    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
-    applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
-    saveLastRoll: saveLastRollStoreEvent,
-    normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
-    evaluateSuccessEvent: evaluateSuccessCoreEvent,
-    createIdEvent: createIdCoreEvent,
-    buildEventRollResultCardEvent,
   });
 }
 
 function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
   return autoRollEventsByAiModeModuleEvent(round, {
-    getSettingsEvent: getSettingsStoreEvent,
-    ensureRoundEventTimersSyncedEvent,
-    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
-    rollExpression: rollExpressionCoreEvent,
-    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
-    applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
-    normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
-    evaluateSuccessEvent: evaluateSuccessCoreEvent,
-    createIdEvent: createIdCoreEvent,
-    buildEventRollResultCardEvent,
-    saveLastRoll: saveLastRollStoreEvent,
-    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
+    ...rollDepsEvent,
   });
 }
 
@@ -735,26 +767,7 @@ export function bindEventButtonsEvent(): void {
 
 function handleGenerationEndedEvent(retry = 0): void {
   handleGenerationEndedModuleEvent(retry, {
-    getSettingsEvent: getSettingsStoreEvent,
-    getLiveContextEvent: getLiveContextCoreEvent,
-    findLatestAssistantEvent,
-    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
-    buildAssistantMessageIdEvent,
-    getPreferredAssistantSourceTextEvent: getPreferredAssistantSourceTextModuleEvent,
-    getMessageTextEvent: getMessageTextModuleEvent,
-    parseEventEnvelopesEvent,
-    filterEventsByApplyScopeEvent: filterEventsByApplyScopeModuleEvent,
-    removeRangesEvent,
-    setMessageTextEvent: setMessageTextModuleEvent,
-    hideEventCodeBlocksInDomEvent: hideEventCodeBlocksInDomModuleEvent,
-    persistChatSafeEvent: persistChatSafeStoreEvent,
-    mergeEventsIntoPendingRoundEvent,
-    autoRollEventsByAiModeEvent,
-    buildEventListCardEvent,
-    pushToChat: pushToChatCoreEvent,
-    sweepTimeoutFailuresEvent,
-    refreshCountdownDomEvent,
-    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
+    ...hooksDepsEvent,
   });
 }
 
