@@ -829,12 +829,40 @@ export function bindMountedSettingsCardEvent(deps: BindMountedSettingsCardDepsEv
 export interface BindSkillRowsEditingActionsDepsEvent {
   SETTINGS_SKILL_ROWS_ID_Event: string;
   SETTINGS_SKILL_ADD_ID_Event: string;
-  getSkillRowsDraftEvent: () => SkillEditorRowDraftEvent[];
-  setSkillRowsDraftEvent: (rows: SkillEditorRowDraftEvent[]) => void;
+  skillDraftAccessorEvent: SkillDraftAccessorEvent;
   createSkillEditorRowDraftEvent: (skillName: string, modifierText: string) => SkillEditorRowDraftEvent;
   renderSkillRowsEvent: () => void;
   refreshSkillDraftDirtyStateEvent: () => void;
   renderSkillValidationErrorsEvent: (errors: string[]) => void;
+}
+
+export interface SkillDraftAccessorEvent {
+  getRows: () => SkillEditorRowDraftEvent[];
+  setRows: (rows: SkillEditorRowDraftEvent[]) => void;
+  getSnapshot: () => string;
+  setSnapshot: (snapshot: string) => void;
+}
+
+export interface CreateSkillDraftAccessorDepsEvent {
+  getRowsEvent: () => SkillEditorRowDraftEvent[];
+  setRowsEvent: (rows: SkillEditorRowDraftEvent[]) => void;
+  getSnapshotEvent: () => string;
+  setSnapshotEvent: (snapshot: string) => void;
+}
+
+/**
+ * 创建技能草稿访问器（纯函数）。
+ * 说明：此访问器是技能草稿状态唯一入口。
+ */
+export function createSkillDraftAccessorEvent(
+  deps: CreateSkillDraftAccessorDepsEvent
+): SkillDraftAccessorEvent {
+  return {
+    getRows: deps.getRowsEvent,
+    setRows: deps.setRowsEvent,
+    getSnapshot: deps.getSnapshotEvent,
+    setSnapshot: deps.setSnapshotEvent,
+  };
 }
 
 export function bindSkillRowsEditingActionsEvent(deps: BindSkillRowsEditingActionsDepsEvent): void {
@@ -847,7 +875,7 @@ export function bindSkillRowsEditingActionsEvent(deps: BindSkillRowsEditingActio
     const rowId = String(target.dataset.skillRowId ?? "");
     const field = String(target.dataset.skillField ?? "");
     if (!rowId || !field) return;
-    const rows = deps.getSkillRowsDraftEvent();
+    const rows = deps.skillDraftAccessorEvent.getRows();
     const row = rows.find((item) => item.rowId === rowId);
     if (!row) return;
     if (field === "name") {
@@ -865,8 +893,8 @@ export function bindSkillRowsEditingActionsEvent(deps: BindSkillRowsEditingActio
     if (!removeBtn) return;
     const rowId = String(removeBtn.dataset.skillRemoveId ?? "");
     if (!rowId) return;
-    const rows = deps.getSkillRowsDraftEvent().filter((row) => row.rowId !== rowId);
-    deps.setSkillRowsDraftEvent(rows);
+    const rows = deps.skillDraftAccessorEvent.getRows().filter((row) => row.rowId !== rowId);
+    deps.skillDraftAccessorEvent.setRows(rows);
     deps.renderSkillRowsEvent();
     deps.refreshSkillDraftDirtyStateEvent();
     deps.renderSkillValidationErrorsEvent([]);
@@ -874,10 +902,10 @@ export function bindSkillRowsEditingActionsEvent(deps: BindSkillRowsEditingActio
 
   skillAddBtn?.addEventListener("click", () => {
     const rows = [
-      ...deps.getSkillRowsDraftEvent(),
+      ...deps.skillDraftAccessorEvent.getRows(),
       deps.createSkillEditorRowDraftEvent("", ""),
     ];
-    deps.setSkillRowsDraftEvent(rows);
+    deps.skillDraftAccessorEvent.setRows(rows);
     deps.renderSkillRowsEvent();
     deps.refreshSkillDraftDirtyStateEvent();
     deps.renderSkillValidationErrorsEvent([]);
@@ -892,8 +920,7 @@ export interface BindSkillImportExportActionsDepsEvent {
   SETTINGS_SKILL_EXPORT_ID_Event: string;
   SETTINGS_SKILL_SAVE_ID_Event: string;
   SETTINGS_SKILL_RESET_ID_Event: string;
-  getSkillRowsDraftEvent: () => SkillEditorRowDraftEvent[];
-  setSkillRowsDraftEvent: (rows: SkillEditorRowDraftEvent[]) => void;
+  skillDraftAccessorEvent: SkillDraftAccessorEvent;
   serializeSkillRowsToSkillTableTextEvent: (rows: SkillEditorRowDraftEvent[]) => string | null;
   getSettingsEvent: () => DicePluginSettingsEvent;
   getSkillPresetStoreEvent: (settings: DicePluginSettingsEvent) => SkillPresetStoreEvent;
@@ -909,7 +936,6 @@ export interface BindSkillImportExportActionsDepsEvent {
   renderSkillValidationErrorsEvent: (errors: string[]) => void;
   copyTextToClipboardEvent: (text: string) => Promise<boolean>;
   pushToChat: (message: string) => void;
-  setSkillEditorLastSavedSnapshotEvent: (snapshot: string) => void;
   buildSkillDraftSnapshotEvent: (rows: SkillEditorRowDraftEvent[]) => string;
   setSkillDraftDirtyEvent: (flag: boolean) => void;
   saveSkillPresetStoreEvent: (store: SkillPresetStoreEvent) => void;
@@ -946,7 +972,7 @@ export function bindSkillImportExportActionsEvent(
     skillImportArea.hidden = !willOpen;
     skillImportToggleBtn.textContent = willOpen ? "收起导入" : "导入 JSON";
     if (!willOpen || !skillTextInput) return;
-    const serialized = deps.serializeSkillRowsToSkillTableTextEvent(deps.getSkillRowsDraftEvent());
+    const serialized = deps.serializeSkillRowsToSkillTableTextEvent(deps.skillDraftAccessorEvent.getRows());
     skillTextInput.value =
       serialized ??
       deps.getActiveSkillPresetEvent(deps.getSkillPresetStoreEvent(deps.getSettingsEvent())).skillTableText;
@@ -966,14 +992,14 @@ export function bindSkillImportExportActionsEvent(
       deps.renderSkillValidationErrorsEvent(validation.errors);
       return;
     }
-    deps.setSkillRowsDraftEvent(importedRows);
+    deps.skillDraftAccessorEvent.setRows(importedRows);
     deps.renderSkillRowsEvent();
     deps.refreshSkillDraftDirtyStateEvent();
     deps.renderSkillValidationErrorsEvent([]);
   });
 
   skillExportBtn?.addEventListener("click", () => {
-    const validation = deps.validateSkillRowsEvent(deps.getSkillRowsDraftEvent());
+    const validation = deps.validateSkillRowsEvent(deps.skillDraftAccessorEvent.getRows());
     const settings = deps.getSettingsEvent();
     const activePreset = deps.getActiveSkillPresetEvent(deps.getSkillPresetStoreEvent(settings));
     const exportText = validation.errors.length
@@ -1005,7 +1031,7 @@ export function bindSkillImportExportActionsEvent(
   });
 
   skillSaveBtn?.addEventListener("click", () => {
-    const validation = deps.validateSkillRowsEvent(deps.getSkillRowsDraftEvent());
+    const validation = deps.validateSkillRowsEvent(deps.skillDraftAccessorEvent.getRows());
     if (validation.errors.length > 0) {
       deps.renderSkillValidationErrorsEvent(validation.errors);
       deps.pushToChat("❌ 技能表保存失败，请先修正校验错误。");
@@ -1013,8 +1039,8 @@ export function bindSkillImportExportActionsEvent(
     }
     const normalized = JSON.stringify(validation.table, null, 2);
     const normalizedRows = deps.deserializeSkillTableTextToRowsEvent(normalized);
-    deps.setSkillRowsDraftEvent(normalizedRows);
-    deps.setSkillEditorLastSavedSnapshotEvent(deps.buildSkillDraftSnapshotEvent(normalizedRows));
+    deps.skillDraftAccessorEvent.setRows(normalizedRows);
+    deps.skillDraftAccessorEvent.setSnapshot(deps.buildSkillDraftSnapshotEvent(normalizedRows));
     const settings = deps.getSettingsEvent();
     const store = deps.getSkillPresetStoreEvent(settings);
     const activePreset = deps.getActiveSkillPresetEvent(store);
@@ -1030,7 +1056,7 @@ export function bindSkillImportExportActionsEvent(
   });
 
   skillResetBtn?.addEventListener("click", () => {
-    deps.setSkillRowsDraftEvent([]);
+    deps.skillDraftAccessorEvent.setRows([]);
     deps.renderSkillRowsEvent();
     deps.refreshSkillDraftDirtyStateEvent();
     deps.renderSkillValidationErrorsEvent([]);

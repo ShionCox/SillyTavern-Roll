@@ -54,6 +54,8 @@ export interface SkillEditorRuntimeEvent {
   getSkillEditorActivePresetIdEvent: () => string;
   /** 设置最后保存快照文本；仅写内部状态。 */
   setSkillEditorLastSavedSnapshotEvent: (snapshot: string) => void;
+  /** 获取最后保存快照文本；无副作用。 */
+  getSkillEditorLastSavedSnapshotEvent: () => string;
   /** 获取上次同步的 settings 技能文本；无副作用。 */
   getSkillEditorLastSettingsTextEvent: () => string;
   /** 获取上次同步的预设仓库文本；无副作用。 */
@@ -176,6 +178,7 @@ export function createSkillEditorRuntimeEvent(
     setSkillEditorLastSavedSnapshotEvent: (snapshot) => {
       SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = snapshot;
     },
+    getSkillEditorLastSavedSnapshotEvent: () => SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event,
     getSkillEditorLastSettingsTextEvent: () => SKILL_EDITOR_LAST_SETTINGS_TEXT_Event,
     getSkillEditorLastPresetStoreTextEvent: () => SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event,
   };
