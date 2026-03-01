@@ -201,14 +201,6 @@ import type {
 
 // ===== 存储结果到宏 =====
 
-function getDiceMeta(): DiceMeta {
-  return getDiceMetaStoreEvent();
-}
-
-function saveLastRoll(result: DiceResult): void {
-  saveLastRollStoreEvent(result);
-}
-
 export function registerBaseMacrosAndCommandsEvent(): void {
   registerBaseMacrosAndCommandsModuleEvent({
     registerMacro,
@@ -216,59 +208,15 @@ export function registerBaseMacrosAndCommandsEvent(): void {
     SlashCommand,
     SlashCommandArgument,
     ARGUMENT_TYPE,
-    getDiceMeta,
+    getDiceMeta: getDiceMetaStoreEvent,
     rollExpression: rollExpressionCoreEvent,
-    saveLastRoll,
+    saveLastRoll: saveLastRollStoreEvent,
     buildResultMessage: buildResultMessageTemplateEvent,
     pushToChat: pushToChatCoreEvent,
   });
 }
 
 // ===== Event: 事件驱动骰子系统 =====
-
-function getLiveContextEvent(): STContext | null {
-  return getLiveContextCoreEvent();
-}
-
-function createIdEvent(prefix: string): string {
-  return createIdCoreEvent(prefix);
-}
-
-function simpleHashEvent(input: string): string {
-  return simpleHashCoreEvent(input);
-}
-
-function escapeHtmlEvent(input: string): string {
-  return escapeHtmlCoreEvent(input);
-}
-
-function escapeAttrEvent(input: string): string {
-  return escapeAttrCoreEvent(input);
-}
-
-function normalizeBlankLinesEvent(input: string): string {
-  return normalizeBlankLinesCoreEvent(input);
-}
-
-function getDiceMetaEvent(): DiceMetaEvent {
-  return getDiceMetaStoreMetaEvent();
-}
-
-function saveMetadataSafeEvent(): void {
-  saveMetadataSafeStoreEvent();
-}
-
-function persistChatSafeEvent(): void {
-  persistChatSafeStoreEvent();
-}
-
-function getSettingsEvent(): DicePluginSettingsEvent {
-  return getSettingsStoreEvent();
-}
-
-function updateSettingsEvent(patch: Partial<DicePluginSettingsEvent>): void {
-  updateSettingsStoreEvent(patch);
-}
 
 
 const skillEditorRuntimeEvent = createSkillEditorRuntimeEvent({
@@ -279,16 +227,16 @@ const skillEditorRuntimeEvent = createSkillEditorRuntimeEvent({
   SETTINGS_SKILL_PRESET_META_ID_Event,
   SETTINGS_SKILL_PRESET_NAME_ID_Event,
   SETTINGS_SKILL_PRESET_DELETE_ID_Event,
-  getSettingsEvent,
+  getSettingsEvent: getSettingsStoreEvent,
   getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
   getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
-  normalizeSkillTableTextForSettingsEvent,
+  normalizeSkillTableTextForSettingsEvent: normalizeSkillTableTextForSettingsStoreEvent,
   deserializeSkillTableTextToRowsEvent: deserializeSkillTableTextToRowsStoreEvent,
   buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
   countSkillEntriesFromSkillTableTextEvent: countSkillEntriesFromSkillTableTextStoreEvent,
   pushToChatEvent: pushToChatCoreEvent,
-  escapeHtmlEvent,
-  escapeAttrEvent,
+  escapeHtmlEvent: escapeHtmlCoreEvent,
+  escapeAttrEvent: escapeAttrCoreEvent,
 });
 
 
@@ -330,7 +278,7 @@ function bindSettingsCardMountedActionsEvent(
     tabsAndModalDepsEvent: {
       ...SETTINGS_TABS_AND_MODAL_IDS_Event,
       confirmDiscardSkillDraftEvent,
-      isElementVisibleEvent,
+      isElementVisibleEvent: isElementVisibleModuleEvent,
       isSkillDraftDirtyEvent,
     },
     basicSettingsInputsDepsEvent: {
@@ -338,7 +286,7 @@ function bindSettingsCardMountedActionsEvent(
       SUMMARY_HISTORY_ROUNDS_MAX_Event,
       SUMMARY_HISTORY_ROUNDS_MIN_Event,
       DEFAULT_SUMMARY_HISTORY_ROUNDS_Event: DEFAULT_SETTINGS_Event.summaryHistoryRounds,
-      updateSettingsEvent,
+      updateSettingsEvent: updateSettingsStoreEvent,
     },
     skillPresetActionsDepsEvent: {
       ...SETTINGS_SKILL_PRESET_ACTION_IDS_Event,
@@ -346,13 +294,13 @@ function bindSettingsCardMountedActionsEvent(
       SKILL_PRESET_DEFAULT_ID_Event,
       getSkillEditorActivePresetIdEvent: skillEditorRuntimeEvent.getSkillEditorActivePresetIdEvent,
       confirmDiscardSkillDraftEvent,
-      getSettingsEvent,
+      getSettingsEvent: getSettingsStoreEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
       getSkillPresetByIdEvent: getSkillPresetByIdStoreEvent,
       saveSkillPresetStoreEvent: saveSkillPresetStoreStoreEvent,
       getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
       getUniqueSkillPresetNameEvent: getUniqueSkillPresetNameStoreEvent,
-      createIdEvent,
+      createIdEvent: createIdCoreEvent,
       buildDefaultSkillPresetStoreEvent: () => buildDefaultSkillPresetStoreTemplateStoreEvent(),
       normalizeSkillPresetNameKeyEvent: normalizeSkillPresetNameKeyStoreEvent,
       renderSkillValidationErrorsEvent,
@@ -372,16 +320,16 @@ function bindSettingsCardMountedActionsEvent(
       // 此访问器是技能草稿状态唯一入口。
       skillDraftAccessorEvent,
       serializeSkillRowsToSkillTableTextEvent: serializeSkillRowsToSkillTableTextStoreEvent,
-      getSettingsEvent,
+      getSettingsEvent: getSettingsStoreEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
       getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
-      normalizeSkillTableTextForSettingsEvent,
+      normalizeSkillTableTextForSettingsEvent: normalizeSkillTableTextForSettingsStoreEvent,
       deserializeSkillTableTextToRowsEvent: deserializeSkillTableTextToRowsStoreEvent,
       validateSkillRowsEvent: validateSkillRowsStoreEvent,
       renderSkillRowsEvent,
       refreshSkillDraftDirtyStateEvent,
       renderSkillValidationErrorsEvent,
-      copyTextToClipboardEvent,
+      copyTextToClipboardEvent: copyTextToClipboardModuleEvent,
       pushToChat: pushToChatCoreEvent,
       buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
       setSkillDraftDirtyEvent: skillEditorRuntimeEvent.setSkillDraftDirtyEvent,
@@ -390,7 +338,7 @@ function bindSettingsCardMountedActionsEvent(
     ruleTextActionsDepsEvent: {
       ...SETTINGS_RULE_TEXT_ACTION_IDS_Event,
       DEFAULT_RULE_TEXT_Event,
-      updateSettingsEvent,
+      updateSettingsEvent: updateSettingsStoreEvent,
     },
   });
 }
@@ -425,7 +373,7 @@ export function mountSettingsCardEvent(attempt = 0): void {
 
 function syncSettingsUiEvent(): void {
   syncSettingsUiModuleEvent({
-    getSettingsEvent,
+    getSettingsEvent: getSettingsStoreEvent,
     ...SETTINGS_SYNC_UI_IDS_Event,
     isSkillDraftDirtyEvent,
     hydrateSkillDraftFromSettingsEvent,
@@ -439,32 +387,6 @@ setSyncSettingsUiCallbackStoreEvent(() => {
   syncSettingsUiEvent();
 });
 
-function isElementVisibleEvent(element: HTMLElement | null): boolean {
-  return isElementVisibleModuleEvent(element);
-}
-
-function copyTextToClipboardEvent(text: string): Promise<boolean> {
-  return copyTextToClipboardModuleEvent(text);
-}
-
-function getMessageTextEvent(message: TavernMessageEvent | undefined): string {
-  return getMessageTextModuleEvent(message);
-}
-
-function getPreferredAssistantSourceTextEvent(
-  message: TavernMessageEvent | undefined
-): string {
-  return getPreferredAssistantSourceTextModuleEvent(message);
-}
-
-function setMessageTextEvent(message: TavernMessageEvent, text: string): void {
-  setMessageTextModuleEvent(message, text);
-}
-
-function isAssistantMessageEvent(message: TavernMessageEvent | undefined): boolean {
-  return isAssistantMessageModuleEvent(message);
-}
-
 function createRoundSummarySnapshotEvent(
   round: PendingRoundEvent,
   now = Date.now()
@@ -473,21 +395,13 @@ function createRoundSummarySnapshotEvent(
     round,
     {
       ensureRoundEventTimersSyncedEvent,
-      getSettingsEvent,
-      getLatestRollRecordForEvent,
-      resolveTriggeredOutcomeEvent,
-      normalizeCompareOperatorEvent,
+      getSettingsEvent: getSettingsStoreEvent,
+      getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
+      resolveTriggeredOutcomeEvent: resolveTriggeredOutcomeModuleEvent,
+      normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
     },
     now
   );
-}
-
-function ensureSummaryHistoryEvent(meta: DiceMetaEvent): RoundSummarySnapshotEvent[] {
-  return ensureSummaryHistoryModuleEvent(meta);
-}
-
-function trimSummaryHistoryEvent(history: RoundSummarySnapshotEvent[]): void {
-  trimSummaryHistoryModuleEvent(history, SUMMARY_HISTORY_MAX_STORED_Event);
 }
 
 function buildSummaryBlockFromHistoryEvent(
@@ -512,28 +426,32 @@ function buildSummaryBlockFromHistoryEvent(
   );
 }
 
-function extractPromptChatFromPayloadEvent(payload: any): TavernMessageEvent[] | null {
-  return extractPromptChatFromPayloadModuleEvent(payload);
+function trimSummaryHistoryEvent(history: RoundSummarySnapshotEvent[]): void {
+  trimSummaryHistoryModuleEvent(history, SUMMARY_HISTORY_MAX_STORED_Event);
+}
+
+function parseIsoDurationToMsEvent(raw: string): number | null {
+  return parseIsoDurationToMsModuleEvent(raw, ISO_8601_DURATION_REGEX_Event);
 }
 
 function handlePromptReadyEvent(payload: any, sourceEvent = "unknown"): void {
   handlePromptReadyModuleEvent(
     payload,
     {
-      getSettingsEvent,
-      getSkillModifierTableMapEvent,
+      getSettingsEvent: getSettingsStoreEvent,
+      getSkillModifierTableMapEvent: getSkillModifierTableMapStoreEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
       getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
       DEFAULT_RULE_TEXT_Event,
       DICE_RULE_BLOCK_START_Event,
       DICE_RULE_BLOCK_END_Event,
       sweepTimeoutFailuresEvent,
-      getDiceMetaEvent,
-      ensureSummaryHistoryEvent,
+      getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+      ensureSummaryHistoryEvent: ensureSummaryHistoryModuleEvent,
       createRoundSummarySnapshotEvent,
       trimSummaryHistoryEvent,
       buildSummaryBlockFromHistoryEvent,
-      saveMetadataSafeEvent,
+      saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
     },
     sourceEvent
   );
@@ -543,34 +461,15 @@ function findLatestAssistantEvent(
   chat: TavernMessageEvent[]
 ): { msg: TavernMessageEvent; index: number } | null {
   return findLatestAssistantModuleEvent(chat, {
-    isAssistantMessageEvent,
+    isAssistantMessageEvent: isAssistantMessageModuleEvent,
   });
 }
 
 function buildAssistantMessageIdEvent(message: TavernMessageEvent, index: number): string {
   return buildAssistantMessageIdModuleEvent(message, index, {
-    simpleHashEvent,
-    getMessageTextEvent,
+    simpleHashEvent: simpleHashCoreEvent,
+    getMessageTextEvent: getMessageTextModuleEvent,
   });
-}
-
-function normalizeCompareOperatorEvent(raw: any): CompareOperatorEvent | null {
-  return normalizeCompareOperatorModuleEvent(raw);
-}
-
-function normalizeSkillTableTextForSettingsEvent(raw: string): string | null {
-  return normalizeSkillTableTextForSettingsStoreEvent(raw);
-}
-
-function getSkillModifierTableMapEvent(settings: DicePluginSettingsEvent): Record<string, number> {
-  return getSkillModifierTableMapStoreEvent(settings);
-}
-
-function resolveSkillModifierBySkillNameEvent(
-  skillName: string,
-  settings = getSettingsEvent()
-): number {
-  return resolveSkillModifierBySkillNameStoreEvent(skillName, settings);
 }
 
 type ResolvedOutcomeEvent = {
@@ -579,25 +478,6 @@ type ResolvedOutcomeEvent = {
   explosionTriggered: boolean;
 };
 
-function resolveTriggeredOutcomeEvent(
-  event: DiceEventSpecEvent,
-  record: EventRollRecordEvent | null | undefined,
-  settings: DicePluginSettingsEvent
-): ResolvedOutcomeEvent {
-  return resolveTriggeredOutcomeModuleEvent(event, record, settings);
-}
-
-function parseIsoDurationToMsEvent(raw: string): number | null {
-  return parseIsoDurationToMsModuleEvent(raw, ISO_8601_DURATION_REGEX_Event);
-}
-
-function applyTimeLimitPolicyMsEvent(
-  durationMs: number | null,
-  settings: DicePluginSettingsEvent
-): number | null {
-  return applyTimeLimitPolicyMsModuleEvent(durationMs, settings);
-}
-
 
 function createSyntheticTimeoutDiceResultEvent(event: DiceEventSpecEvent): DiceResult {
   return createSyntheticTimeoutDiceResultModuleEvent(event, {
@@ -605,41 +485,13 @@ function createSyntheticTimeoutDiceResultEvent(event: DiceEventSpecEvent): DiceR
   });
 }
 
-function applySkillModifierToDiceResultEvent(
-  result: DiceResult,
-  skillModifier: number
-): { result: DiceResult; baseModifierUsed: number; finalModifierUsed: number } {
-  return applySkillModifierToDiceResultModuleEvent(result, skillModifier);
-}
-
-function getLatestRollRecordForEvent(
-  round: PendingRoundEvent,
-  eventId: string
-): EventRollRecordEvent | null {
-  return getLatestRollRecordForModuleEvent(round, eventId);
-}
-
 function ensureRoundEventTimersSyncedEvent(round: PendingRoundEvent): void {
   ensureRoundEventTimersSyncedModuleEvent(round, {
-    getSettingsEvent,
-    resolveEventTargetEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    resolveEventTargetEvent: resolveEventTargetModuleEvent,
     parseIsoDurationToMsEvent,
-    applyTimeLimitPolicyMsEvent,
+    applyTimeLimitPolicyMsEvent: applyTimeLimitPolicyMsModuleEvent,
   });
-}
-
-function resolveEventTargetEvent(
-  raw: any,
-  scope?: EventScopeTagEvent
-): { targetType: EventTargetTypeEvent; targetName?: string; targetLabel: string } {
-  return resolveEventTargetModuleEvent(raw, scope);
-}
-
-function filterEventsByApplyScopeEvent(
-  events: DiceEventSpecEvent[],
-  applyScope: EventApplyScopeSettingEvent
-): DiceEventSpecEvent[] {
-  return filterEventsByApplyScopeModuleEvent(events, applyScope);
 }
 
 type RemovalRangeEvent = { start: number; end: number };
@@ -649,14 +501,14 @@ function parseEventEnvelopesEvent(text: string): {
   ranges: RemovalRangeEvent[];
 } {
   return parseEventEnvelopesModuleEvent(text, {
-    getSettingsEvent,
+    getSettingsEvent: getSettingsStoreEvent,
     OUTCOME_TEXT_MAX_LEN_Event,
     ISO_8601_DURATION_REGEX_Event,
   });
 }
 
 function removeRangesEvent(text: string, ranges: RemovalRangeEvent[]): string {
-  return removeRangesModuleEvent(text, ranges, normalizeBlankLinesEvent);
+  return removeRangesModuleEvent(text, ranges, normalizeBlankLinesCoreEvent);
 }
 
 function createTimeoutFailureRecordEvent(
@@ -665,11 +517,11 @@ function createTimeoutFailureRecordEvent(
   now: number
 ): EventRollRecordEvent {
   return createTimeoutFailureRecordModuleEvent(round, event, now, {
-    getSettingsEvent,
-    normalizeCompareOperatorEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
     createSyntheticTimeoutDiceResultEvent,
-    resolveSkillModifierBySkillNameEvent,
-    createIdEvent,
+    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
+    createIdEvent: createIdCoreEvent,
   });
 }
 
@@ -682,8 +534,8 @@ function recordTimeoutFailureIfNeededEvent(
     round,
     event,
     {
-      getSettingsEvent,
-      getLatestRollRecordForEvent,
+      getSettingsEvent: getSettingsStoreEvent,
+      getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
       ensureRoundEventTimersSyncedEvent,
       createTimeoutFailureRecordEvent,
     },
@@ -693,11 +545,11 @@ function recordTimeoutFailureIfNeededEvent(
 
 export function sweepTimeoutFailuresEvent(): boolean {
   return sweepTimeoutFailuresModuleEvent({
-    getSettingsEvent,
-    getDiceMetaEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
     ensureRoundEventTimersSyncedEvent,
     recordTimeoutFailureIfNeededEvent,
-    saveMetadataSafeEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
   });
 }
 
@@ -706,13 +558,13 @@ function mergeEventsIntoPendingRoundEvent(
   assistantMsgId: string
 ): PendingRoundEvent {
   return mergeEventsIntoPendingRoundModuleEvent(events, assistantMsgId, {
-    getSettingsEvent,
-    getDiceMetaEvent,
-    createIdEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+    createIdEvent: createIdCoreEvent,
     parseIsoDurationToMsEvent,
-    applyTimeLimitPolicyMsEvent,
-    resolveEventTargetEvent,
-    saveMetadataSafeEvent,
+    applyTimeLimitPolicyMsEvent: applyTimeLimitPolicyMsModuleEvent,
+    resolveEventTargetEvent: resolveEventTargetModuleEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
   });
 }
 
@@ -721,8 +573,8 @@ function formatRollRecordSummaryEvent(
   event?: DiceEventSpecEvent
 ): string {
   return formatRollRecordSummaryModuleEvent(record, event, {
-    getSettingsEvent,
-    resolveTriggeredOutcomeEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    resolveTriggeredOutcomeEvent: resolveTriggeredOutcomeModuleEvent,
     formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
   });
 }
@@ -736,82 +588,62 @@ function getEventRuntimeViewStateEvent(
     round,
     event,
     {
-      getSettingsEvent,
-      getLatestRollRecordForEvent,
+      getSettingsEvent: getSettingsStoreEvent,
+      getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
       ensureRoundEventTimersSyncedEvent,
     },
     now
   );
 }
 
-function getRuntimeToneStyleEvent(tone: EventRuntimeToneEvent): {
-  border: string;
-  background: string;
-  color: string;
-} {
-  return getRuntimeToneStyleModuleEvent(tone);
-}
-
 export function refreshCountdownDomEvent(): void {
   refreshCountdownDomModuleEvent({
-    getDiceMetaEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
     ensureRoundEventTimersSyncedEvent,
     getEventRuntimeViewStateEvent,
-    getRuntimeToneStyleEvent,
+    getRuntimeToneStyleEvent: getRuntimeToneStyleModuleEvent,
   });
-}
-
-function hideEventCodeBlocksInDomEvent(): void {
-  hideEventCodeBlocksInDomModuleEvent();
 }
 
 function sanitizeAssistantMessageEventBlocksEvent(message: TavernMessageEvent): boolean {
   return sanitizeAssistantMessageEventBlocksModuleEvent(message, {
-    getPreferredAssistantSourceTextEvent,
-    getMessageTextEvent,
+    getPreferredAssistantSourceTextEvent: getPreferredAssistantSourceTextModuleEvent,
+    getMessageTextEvent: getMessageTextModuleEvent,
     parseEventEnvelopesEvent,
     removeRangesEvent,
-    setMessageTextEvent,
+    setMessageTextEvent: setMessageTextModuleEvent,
   });
 }
 
 export function sanitizeCurrentChatEventBlocksEvent(): void {
   sanitizeCurrentChatEventBlocksModuleEvent({
-    getLiveContextEvent,
-    isAssistantMessageEvent,
+    getLiveContextEvent: getLiveContextCoreEvent,
+    isAssistantMessageEvent: isAssistantMessageModuleEvent,
     sanitizeAssistantMessageEventBlocksEvent,
-    persistChatSafeEvent,
-    hideEventCodeBlocksInDomEvent,
+    persistChatSafeEvent: persistChatSafeStoreEvent,
+    hideEventCodeBlocksInDomEvent: hideEventCodeBlocksInDomModuleEvent,
   });
 }
 
 function buildEventListCardEvent(round: PendingRoundEvent): string {
   return buildEventListCardModuleEvent(round, {
-    getSettingsEvent,
+    getSettingsEvent: getSettingsStoreEvent,
     ensureRoundEventTimersSyncedEvent,
-    getLatestRollRecordForEvent,
+    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
     getEventRuntimeViewStateEvent,
-    getRuntimeToneStyleEvent,
+    getRuntimeToneStyleEvent: getRuntimeToneStyleModuleEvent,
     buildEventRolledPrefixTemplateEvent,
     buildEventRolledBlockTemplateEvent,
     formatRollRecordSummaryEvent,
     parseDiceExpression: parseDiceExpressionCoreEvent,
-    resolveSkillModifierBySkillNameEvent,
+    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
     formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildEventRollButtonTemplateEvent,
     buildEventListItemTemplateEvent,
     buildEventListCardTemplateEvent,
-    escapeHtmlEvent,
-    escapeAttrEvent,
+    escapeHtmlEvent: escapeHtmlCoreEvent,
+    escapeAttrEvent: escapeAttrCoreEvent,
   });
-}
-
-function evaluateSuccessEvent(
-  total: number,
-  compare: CompareOperatorEvent,
-  dc: number | null
-): boolean | null {
-  return evaluateSuccessCoreEvent(total, compare, dc);
 }
 
 function buildEventRollResultCardEvent(
@@ -819,13 +651,13 @@ function buildEventRollResultCardEvent(
   record: EventRollRecordEvent
 ): string {
   return buildEventRollResultCardModuleEvent(event, record, {
-    getSettingsEvent,
-    resolveTriggeredOutcomeEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    resolveTriggeredOutcomeEvent: resolveTriggeredOutcomeModuleEvent,
     formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildRollsSummaryTemplateEvent,
     formatModifier: formatModifierCoreEvent,
     buildEventRollResultCardTemplateEvent,
-    escapeHtmlEvent,
+    escapeHtmlEvent: escapeHtmlCoreEvent,
     getDiceSvg: buildDiceSvgTemplateEvent,
     getRollingSvg: buildRollingSvgTemplateEvent,
     buildAlreadyRolledDiceVisualTemplateEvent,
@@ -837,13 +669,13 @@ function buildEventAlreadyRolledCardEvent(
   record: EventRollRecordEvent
 ): string {
   return buildEventAlreadyRolledCardModuleEvent(event, record, {
-    getSettingsEvent,
-    resolveTriggeredOutcomeEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    resolveTriggeredOutcomeEvent: resolveTriggeredOutcomeModuleEvent,
     formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildEventDistributionBlockTemplateEvent,
     buildEventTimeoutAtBlockTemplateEvent,
     buildEventAlreadyRolledCardTemplateEvent,
-    escapeHtmlEvent,
+    escapeHtmlEvent: escapeHtmlCoreEvent,
     formatModifier: formatModifierCoreEvent,
     getDiceSvg: buildDiceSvgTemplateEvent,
     getRollingSvg: buildRollingSvgTemplateEvent,
@@ -857,40 +689,40 @@ function performEventRollByIdEvent(
 ): string {
   return performEventRollByIdModuleEvent(eventIdRaw, overrideExpr, expectedRoundId, {
     sweepTimeoutFailuresEvent,
-    getDiceMetaEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
     ensureRoundEventTimersSyncedEvent,
     recordTimeoutFailureIfNeededEvent,
-    saveMetadataSafeEvent,
-    getLatestRollRecordForEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
+    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
     buildEventAlreadyRolledCardEvent,
     pushToChat: pushToChatCoreEvent,
     refreshCountdownDomEvent,
     rollExpression: rollExpressionCoreEvent,
-    getSettingsEvent,
-    resolveSkillModifierBySkillNameEvent,
-    applySkillModifierToDiceResultEvent,
-    saveLastRoll,
-    normalizeCompareOperatorEvent,
-    evaluateSuccessEvent,
-    createIdEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
+    applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
+    saveLastRoll: saveLastRollStoreEvent,
+    normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
+    evaluateSuccessEvent: evaluateSuccessCoreEvent,
+    createIdEvent: createIdCoreEvent,
     buildEventRollResultCardEvent,
   });
 }
 
 function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
   return autoRollEventsByAiModeModuleEvent(round, {
-    getSettingsEvent,
+    getSettingsEvent: getSettingsStoreEvent,
     ensureRoundEventTimersSyncedEvent,
-    getLatestRollRecordForEvent,
+    getLatestRollRecordForEvent: getLatestRollRecordForModuleEvent,
     rollExpression: rollExpressionCoreEvent,
-    resolveSkillModifierBySkillNameEvent,
-    applySkillModifierToDiceResultEvent,
-    normalizeCompareOperatorEvent,
-    evaluateSuccessEvent,
-    createIdEvent,
+    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
+    applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
+    normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
+    evaluateSuccessEvent: evaluateSuccessCoreEvent,
+    createIdEvent: createIdCoreEvent,
     buildEventRollResultCardEvent,
-    saveLastRoll,
-    saveMetadataSafeEvent,
+    saveLastRoll: saveLastRollStoreEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
   });
 }
 
@@ -903,33 +735,33 @@ export function bindEventButtonsEvent(): void {
 
 function handleGenerationEndedEvent(retry = 0): void {
   handleGenerationEndedModuleEvent(retry, {
-    getSettingsEvent,
-    getLiveContextEvent,
+    getSettingsEvent: getSettingsStoreEvent,
+    getLiveContextEvent: getLiveContextCoreEvent,
     findLatestAssistantEvent,
-    getDiceMetaEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
     buildAssistantMessageIdEvent,
-    getPreferredAssistantSourceTextEvent,
-    getMessageTextEvent,
+    getPreferredAssistantSourceTextEvent: getPreferredAssistantSourceTextModuleEvent,
+    getMessageTextEvent: getMessageTextModuleEvent,
     parseEventEnvelopesEvent,
-    filterEventsByApplyScopeEvent,
+    filterEventsByApplyScopeEvent: filterEventsByApplyScopeModuleEvent,
     removeRangesEvent,
-    setMessageTextEvent,
-    hideEventCodeBlocksInDomEvent,
-    persistChatSafeEvent,
+    setMessageTextEvent: setMessageTextModuleEvent,
+    hideEventCodeBlocksInDomEvent: hideEventCodeBlocksInDomModuleEvent,
+    persistChatSafeEvent: persistChatSafeStoreEvent,
     mergeEventsIntoPendingRoundEvent,
     autoRollEventsByAiModeEvent,
     buildEventListCardEvent,
     pushToChat: pushToChatCoreEvent,
     sweepTimeoutFailuresEvent,
     refreshCountdownDomEvent,
-    saveMetadataSafeEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
   });
 }
 
 function clearDiceMetaEventState(reason = "chat_reset"): void {
   clearDiceMetaEventStateModuleEvent(reason, {
-    getDiceMetaEvent,
-    saveMetadataSafeEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+    saveMetadataSafeEvent: saveMetadataSafeStoreEvent,
   });
 }
 
@@ -941,13 +773,13 @@ export function registerEventRollCommandEvent(): void {
     ARGUMENT_TYPE,
     pushToChat: pushToChatCoreEvent,
     sweepTimeoutFailuresEvent,
-    getDiceMetaEvent,
-    getSettingsEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+    getSettingsEvent: getSettingsStoreEvent,
     ensureRoundEventTimersSyncedEvent,
     getEventRuntimeViewStateEvent,
-    resolveSkillModifierBySkillNameEvent,
+    resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
     performEventRollByIdEvent,
-    escapeHtmlEvent,
+    escapeHtmlEvent: escapeHtmlCoreEvent,
   });
 }
 
@@ -960,10 +792,10 @@ export function startCountdownTickerEvent(): void {
 
 export function registerEventHooksEvent(): void {
   registerEventHooksModuleEvent({
-    getLiveContextEvent,
+    getLiveContextEvent: getLiveContextCoreEvent,
     eventSource,
     event_types,
-    extractPromptChatFromPayloadEvent,
+    extractPromptChatFromPayloadEvent: extractPromptChatFromPayloadModuleEvent,
     handlePromptReadyEvent,
     handleGenerationEndedEvent,
     clearDiceMetaEventState,
@@ -977,9 +809,9 @@ export function registerDebugCommandEvent(): void {
   registerDebugCommandModuleEvent({
     SlashCommandParser,
     SlashCommand,
-    getDiceMeta,
-    getDiceMetaEvent,
-    escapeHtmlEvent,
+    getDiceMeta: getDiceMetaStoreEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
+    escapeHtmlEvent: escapeHtmlCoreEvent,
     pushToChat: pushToChatCoreEvent,
   });
 }
