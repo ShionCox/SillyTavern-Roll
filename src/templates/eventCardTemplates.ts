@@ -4,6 +4,7 @@ export interface EventListItemTemplateParamsEvent {
   descHtml: string;
   targetHtml: string;
   skillHtml: string;
+  skillTitleAttr: string;
   modifierTextHtml: string;
   checkDiceHtml: string;
   compareHtml: string;
@@ -78,7 +79,7 @@ export function buildEventListItemTemplateEvent(
 
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;justify-content:center;text-align:center;">
           <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">目标 <span style="color:#9ad1ff;">${params.targetHtml}</span></span>
-          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">技能 <span style="color:#fff;">${params.skillHtml}</span></span>
+          <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">技能 <span style="color:#fff;cursor:help;" title="${params.skillTitleAttr}">${params.skillHtml}</span></span>
           <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">骰子 <span style="color:#ffdfa3;">${params.checkDiceHtml}</span></span>
           <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">检定 <span style="color:#ffbbbb;">${params.compareHtml} ${params.dcText}</span></span>
           <span style="font-size:11px;padding:3px 8px;border:1px solid rgba(150,150,150,0.2);background:rgba(255,255,255,0.05);color:#d1c5a5;text-transform:uppercase;">时间 <span style="color:#a0d9a0;">${params.timeLimitHtml}</span></span>
@@ -119,7 +120,9 @@ export interface EventRollResultCardTemplateParamsEvent {
   sourceHtml: string;
   targetHtml: string;
   skillHtml: string;
+  skillTitleAttr: string;
   diceExprHtml: string;
+  diceModifierHintHtml: string;
   rollsSummaryHtml: string;
   modifierBreakdownHtml: string;
   compareHtml: string;
@@ -162,10 +165,10 @@ export function buildEventRollResultCardTemplateEvent(
       <div style="color:#9ad1ff;">${params.targetHtml}</div>
 
       <div style="color:#8c7b60;text-align:right;">技能</div>
-      <div style="color:#fff;">${params.skillHtml}</div>
+      <div style="color:#fff;"><span style="cursor:help;" title="${params.skillTitleAttr}">${params.skillHtml}</span></div>
 
       <div style="color:#8c7b60;text-align:right;">骰子</div>
-      <div style="font-family:monospace;color:#ffdfa3;">${params.diceExprHtml}</div>
+      <div style="font-family:monospace;color:#ffdfa3;">${params.diceExprHtml}${params.diceModifierHintHtml ? `<span style=\"margin-left:8px;color:#ffd987;\">${params.diceModifierHintHtml}</span>` : ""}</div>
 
       <div style="color:#8c7b60;text-align:right;">掷骰结果</div>
       <div style="font-family:monospace;">${params.rollsSummaryHtml}</div>

@@ -5,6 +5,37 @@ const MAX_DICE_COUNT = 1000;
 const MAX_DICE_SIDES = 1000;
 const MAX_EXPLOSION_ROLLS = 10000;
 
+function parseAllowedSidesFromRuleTextEvent(ruleText: string): Set<number> | null {
+  const raw = String(ruleText || "").trim();
+  if (!raw) return null;
+
+  const blockMatch = raw.match(/\[DICE_ALLOWED_SIDES\]([\s\S]*?)\[\/DICE_ALLOWED_SIDES\]/i);
+  const scanText = blockMatch ? blockMatch[1] : raw;
+  const lineMatch = scanText.match(/allowed_sides\s*=\s*([^\n\r]+)/i);
+  if (!lineMatch) return null;
+
+  const parsed = lineMatch[1]
+    .split(/[，,\s]+/)
+    .map((item) => Number(String(item || "").trim()))
+    .filter((value) => Number.isFinite(value) && Number.isInteger(value) && value > 0);
+
+  if (parsed.length === 0) return null;
+  return new Set(parsed);
+}
+
+function applyRulePolicyToExpressionEvent(exprRaw: string, ruleText: string): void {
+  const parsedExpr = parseDiceExpression(exprRaw);
+  const allowedSidesSet = parseAllowedSidesFromRuleTextEvent(ruleText);
+  if (!allowedSidesSet || allowedSidesSet.size === 0) return;
+  if (!allowedSidesSet.has(parsedExpr.sides)) {
+    throw new Error(
+      `当前规则不允许 d${parsedExpr.sides}（allowed_sides=${Array.from(allowedSidesSet)
+        .sort((a, b) => a - b)
+        .join(",")}）`
+    );
+  }
+}
+
 export function parseDiceExpression(exprRaw: string): {
   count: number;
   sides: number;
@@ -106,6 +137,11 @@ export function rollExpression(
   exprRaw: string,
   options: DiceOptions = {}
 ): DiceResult {
+  if (options.rule) {
+    // 根据规则文本进行预校验（例如限制 allowed_sides）。
+    applyRulePolicyToExpressionEvent(exprRaw, options.rule);
+  }
+
   let result = rollBaseExpression(exprRaw);
 
   if (options.adv) {
@@ -118,10 +154,6 @@ export function rollExpression(
     const r1 = rollBaseExpression(exprRaw);
     const r2 = rollBaseExpression(exprRaw);
     result = r1.total <= r2.total ? r1 : r2;
-  }
-
-  if (options.rule) {
-    // TODO: 根据规则处理结果
   }
 
   return result;
@@ -167,4 +199,3 @@ export function applySkillModifierToDiceResultEvent(
     finalModifierUsed,
   };
 }
-
