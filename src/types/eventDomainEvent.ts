@@ -27,6 +27,7 @@ export interface DicePluginSettingsEvent {
   autoSendRuleToAI: boolean;
   enableAiRollMode: boolean;
   enableExplodingDice: boolean;
+  aiAllowedDiceSidesText: string;
   summaryDetailMode: SummaryDetailModeEvent;
   summaryHistoryRounds: number;
   eventApplyScope: EventApplyScopeSettingEvent;
@@ -172,4 +173,3 @@ export interface TavernMessageEvent {
   timestamp?: string | number;
   [key: string]: any;
 }
-

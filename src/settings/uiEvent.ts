@@ -56,6 +56,7 @@ export interface BuildSettingsCardTemplateIdsDepsEvent {
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
   SETTINGS_SCOPE_ID_Event: string;
@@ -122,6 +123,7 @@ export function buildSettingsCardTemplateIdsEvent(
     ruleId: deps.SETTINGS_RULE_ID_Event,
     aiRollModeId: deps.SETTINGS_AI_ROLL_MODE_ID_Event,
     explodingEnabledId: deps.SETTINGS_EXPLODING_ENABLED_ID_Event,
+    allowedDiceSidesId: deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
     summaryDetailId: deps.SETTINGS_SUMMARY_DETAIL_ID_Event,
     summaryRoundsId: deps.SETTINGS_SUMMARY_ROUNDS_ID_Event,
     scopeId: deps.SETTINGS_SCOPE_ID_Event,
@@ -478,6 +480,7 @@ export interface BindBasicSettingsInputsDepsEvent {
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
   SETTINGS_SCOPE_ID_Event: string;
@@ -496,6 +499,7 @@ export interface BindBasicSettingsInputsDepsEvent {
     autoSendRuleToAI?: boolean;
     enableAiRollMode?: boolean;
     enableExplodingDice?: boolean;
+    aiAllowedDiceSidesText?: string;
     summaryDetailMode?: "minimal" | "balanced" | "detailed";
     summaryHistoryRounds?: number;
     eventApplyScope?: "protagonist_only" | "all";
@@ -517,6 +521,9 @@ export function bindBasicSettingsInputsEvent(deps: BindBasicSettingsInputsDepsEv
   ) as HTMLInputElement | null;
   const explodingEnabledInput = document.getElementById(
     deps.SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const allowedDiceSidesInput = document.getElementById(
+    deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event
   ) as HTMLInputElement | null;
   const summaryDetailInput = document.getElementById(
     deps.SETTINGS_SUMMARY_DETAIL_ID_Event
@@ -565,6 +572,11 @@ export function bindBasicSettingsInputsEvent(deps: BindBasicSettingsInputsDepsEv
   explodingEnabledInput?.addEventListener("input", (event) => {
     const value = Boolean((event.target as HTMLInputElement).checked);
     deps.updateSettingsEvent({ enableExplodingDice: value });
+  });
+
+  allowedDiceSidesInput?.addEventListener("change", (event) => {
+    const value = String((event.target as HTMLInputElement).value || "").trim();
+    deps.updateSettingsEvent({ aiAllowedDiceSidesText: value });
   });
 
   summaryDetailInput?.addEventListener("change", (event) => {
@@ -1241,6 +1253,7 @@ export interface SyncSettingsUiDepsEvent {
     autoSendRuleToAI: boolean;
     enableAiRollMode: boolean;
     enableExplodingDice: boolean;
+    aiAllowedDiceSidesText: string;
     summaryDetailMode: string;
     summaryHistoryRounds: number;
     eventApplyScope: string;
@@ -1259,6 +1272,7 @@ export interface SyncSettingsUiDepsEvent {
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
   SETTINGS_SCOPE_ID_Event: string;
@@ -1288,6 +1302,9 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   ) as HTMLInputElement | null;
   const explodingEnabledInput = document.getElementById(
     deps.SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const allowedDiceSidesInput = document.getElementById(
+    deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event
   ) as HTMLInputElement | null;
   const summaryDetailInput = document.getElementById(
     deps.SETTINGS_SUMMARY_DETAIL_ID_Event
@@ -1326,6 +1343,7 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   if (ruleInput) ruleInput.checked = Boolean(settings.autoSendRuleToAI);
   if (aiRollModeInput) aiRollModeInput.checked = Boolean(settings.enableAiRollMode);
   if (explodingEnabledInput) explodingEnabledInput.checked = Boolean(settings.enableExplodingDice);
+  if (allowedDiceSidesInput) allowedDiceSidesInput.value = String(settings.aiAllowedDiceSidesText || "");
   if (summaryDetailInput) summaryDetailInput.value = settings.summaryDetailMode;
   if (summaryRoundsInput) summaryRoundsInput.value = String(settings.summaryHistoryRounds);
   if (scopeInput) scopeInput.value = settings.eventApplyScope;

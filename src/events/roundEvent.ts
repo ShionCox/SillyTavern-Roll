@@ -1,4 +1,4 @@
-import type { DiceResult } from "../types/diceEvent";
+import type { DiceOptions, DiceResult } from "../types/diceEvent";
 import type {
   CompareOperatorEvent,
   DiceEventSpecEvent,
@@ -457,7 +457,7 @@ export interface PerformEventRollByIdDepsEvent {
   ) => string;
   pushToChat: (message: string) => string | undefined | void;
   refreshCountdownDomEvent: () => void;
-  rollExpression: (exprRaw: string) => DiceResult;
+  rollExpression: (exprRaw: string, options?: DiceOptions) => DiceResult;
   getSettingsEvent: () => DicePluginSettingsEvent;
   resolveSkillModifierBySkillNameEvent: (
     skillName: string,
@@ -526,13 +526,14 @@ export function performEventRollByIdEvent(
     return `❌ 事件 ${eventId} 缺少可用骰式。`;
   }
 
+  const settings = deps.getSettingsEvent();
+
   let result: DiceResult;
   try {
-    result = deps.rollExpression(expr);
+    result = deps.rollExpression(expr, { rule: settings.ruleText });
   } catch (error: any) {
     return `❌ 掷骰失败：${error?.message ?? String(error)}`;
   }
-  const settings = deps.getSettingsEvent();
   const skillModifierApplied = deps.resolveSkillModifierBySkillNameEvent(event.skill, settings);
   const adjusted = deps.applySkillModifierToDiceResultEvent(result, skillModifierApplied);
   result = adjusted.result;
@@ -577,7 +578,7 @@ export interface AutoRollEventsByAiModeDepsEvent {
     round: PendingRoundEvent,
     eventId: string
   ) => EventRollRecordEvent | null;
-  rollExpression: (exprRaw: string) => DiceResult;
+  rollExpression: (exprRaw: string, options?: DiceOptions) => DiceResult;
   resolveSkillModifierBySkillNameEvent: (
     skillName: string,
     settings?: DicePluginSettingsEvent
@@ -626,7 +627,7 @@ export function autoRollEventsByAiModeEvent(
 
     let result: DiceResult;
     try {
-      result = deps.rollExpression(expr);
+      result = deps.rollExpression(expr, { rule: settings.ruleText });
     } catch (error) {
       console.warn(`[骰子插件] AI 自动投骰失败: event=${event.id}`, error);
       continue;
