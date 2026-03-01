@@ -1,0 +1,708 @@
+import type { DiceResult } from "../types/diceEvent";
+import type {
+  CompareOperatorEvent,
+  DiceEventSpecEvent,
+  DiceMetaEvent,
+  DicePluginSettingsEvent,
+  EventOutcomeKindEvent,
+  EventRollRecordEvent,
+  PendingRoundEvent,
+} from "../types/eventDomainEvent";
+
+export type EventRuntimeToneEvent = "neutral" | "warn" | "danger" | "success";
+
+export type EventRuntimeViewStateEvent = {
+  text: string;
+  tone: EventRuntimeToneEvent;
+  locked: boolean;
+};
+
+type ResolvedOutcomeEvent = {
+  kind: EventOutcomeKindEvent;
+  text: string;
+  explosionTriggered: boolean;
+};
+
+export function formatCountdownMsEvent(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+export interface GetEventRuntimeViewStateDepsEvent {
+  getSettingsEvent: () => DicePluginSettingsEvent;
+  getLatestRollRecordForEvent: (
+    round: PendingRoundEvent,
+    eventId: string
+  ) => EventRollRecordEvent | null;
+  ensureRoundEventTimersSyncedEvent: (round: PendingRoundEvent) => void;
+}
+
+export function getEventRuntimeViewStateEvent(
+  round: PendingRoundEvent,
+  event: DiceEventSpecEvent,
+  deps: GetEventRuntimeViewStateDepsEvent,
+  now = Date.now()
+): EventRuntimeViewStateEvent {
+  const settings = deps.getSettingsEvent();
+  const record = deps.getLatestRollRecordForEvent(round, event.id);
+  if (record) {
+    if (record.source === "timeout_auto_fail") {
+      return { text: "已超时失败", tone: "danger", locked: true };
+    }
+    if (record.success === false) {
+      return { text: "已结算(失败)", tone: "danger", locked: true };
+    }
+    return { text: "已结算", tone: "success", locked: true };
+  }
+
+  if (!settings.enableTimeLimit) {
+    return { text: "时限关闭", tone: "neutral", locked: false };
+  }
+
+  deps.ensureRoundEventTimersSyncedEvent(round);
+  const timer = round.eventTimers[event.id];
+  if (!timer || timer.deadlineAt == null) {
+    return { text: "不限时", tone: "neutral", locked: false };
+  }
+
+  const remainingMs = timer.deadlineAt - now;
+  if (remainingMs <= 0) {
+    return { text: "已超时", tone: "danger", locked: true };
+  }
+  if (remainingMs <= 10_000) {
+    return { text: `剩余 ${formatCountdownMsEvent(remainingMs)}`, tone: "warn", locked: false };
+  }
+  return { text: `剩余 ${formatCountdownMsEvent(remainingMs)}`, tone: "neutral", locked: false };
+}
+
+export function getRuntimeToneStyleEvent(tone: EventRuntimeToneEvent): {
+  border: string;
+  background: string;
+  color: string;
+} {
+  switch (tone) {
+    case "warn":
+      return {
+        border: "1px solid rgba(255,196,87,0.55)",
+        background: "rgba(71,47,14,0.45)",
+        color: "#ffd987",
+      };
+    case "danger":
+      return {
+        border: "1px solid rgba(255,120,120,0.55)",
+        background: "rgba(80,20,20,0.45)",
+        color: "#ffb6b6",
+      };
+    case "success":
+      return {
+        border: "1px solid rgba(136,255,173,0.55)",
+        background: "rgba(18,54,36,0.45)",
+        color: "#bfffd1",
+      };
+    default:
+      return {
+        border: "1px solid rgba(173,201,255,0.45)",
+        background: "rgba(20,36,62,0.45)",
+        color: "#d1e6ff",
+      };
+  }
+}
+
+function setEventButtonsDisabledStateEvent(
+  roundId: string,
+  eventId: string,
+  disabled: boolean
+): void {
+  const buttons = Array.from(
+    document.querySelectorAll("button[data-dice-event-roll='1']")
+  ) as HTMLButtonElement[];
+  for (const button of buttons) {
+    const btnRoundId = button.getAttribute("data-round-id") || "";
+    const btnEventId = button.getAttribute("data-dice-event-id") || "";
+    if (btnRoundId !== roundId || btnEventId !== eventId) continue;
+    button.disabled = disabled;
+    button.style.display = disabled ? "none" : "inline-block";
+    button.style.opacity = disabled ? "0.5" : "1";
+    button.style.cursor = disabled ? "not-allowed" : "pointer";
+    button.style.filter = disabled ? "grayscale(0.35)" : "";
+  }
+}
+
+export interface RefreshCountdownDomDepsEvent {
+  getDiceMetaEvent: () => DiceMetaEvent;
+  ensureRoundEventTimersSyncedEvent: (round: PendingRoundEvent) => void;
+  getEventRuntimeViewStateEvent: (
+    round: PendingRoundEvent,
+    event: DiceEventSpecEvent,
+    now?: number
+  ) => EventRuntimeViewStateEvent;
+  getRuntimeToneStyleEvent: (tone: EventRuntimeToneEvent) => {
+    border: string;
+    background: string;
+    color: string;
+  };
+}
+
+export function refreshCountdownDomEvent(deps: RefreshCountdownDomDepsEvent): void {
+  const nodes = Array.from(
+    document.querySelectorAll("[data-dice-countdown='1']")
+  ) as HTMLElement[];
+  const buttons = Array.from(
+    document.querySelectorAll("button[data-dice-event-roll='1']")
+  ) as HTMLButtonElement[];
+  if (nodes.length === 0 && buttons.length === 0) return;
+
+  const meta = deps.getDiceMetaEvent();
+  const round = meta.pendingRound;
+  if (!round) {
+    for (const button of buttons) {
+      button.disabled = true;
+      button.style.display = "none";
+      button.style.opacity = "0.5";
+      button.style.cursor = "not-allowed";
+      button.style.filter = "grayscale(0.35)";
+    }
+    return;
+  }
+
+  deps.ensureRoundEventTimersSyncedEvent(round);
+  const now = Date.now();
+  for (const node of nodes) {
+    const roundId = node.getAttribute("data-round-id") || "";
+    const eventId = node.getAttribute("data-event-id") || "";
+    if (!roundId || !eventId || roundId !== round.roundId) continue;
+
+    const event = round.events.find((item) => item.id === eventId);
+    if (!event) continue;
+
+    const state = deps.getEventRuntimeViewStateEvent(round, event, now);
+    const toneStyle = deps.getRuntimeToneStyleEvent(state.tone);
+    node.textContent = `⏱ ${state.text}`;
+    node.style.border = toneStyle.border;
+    node.style.background = toneStyle.background;
+    node.style.color = toneStyle.color;
+    setEventButtonsDisabledStateEvent(round.roundId, event.id, state.locked);
+  }
+}
+
+export function hideEventCodeBlocksInDomEvent(): void {
+  try {
+    const preBlocks = Array.from(document.querySelectorAll("pre"));
+    for (const pre of preBlocks) {
+      const text = (pre.textContent || "").trim();
+      if (!text) continue;
+      const hasEventPayload =
+        text.includes("dice_events") && text.includes("\"events\"") && text.includes("\"type\"");
+      if (!hasEventPayload) continue;
+      pre.remove();
+    }
+  } catch (error) {
+    console.warn("[骰子插件] 隐藏事件代码块失败", error);
+  }
+}
+
+function buildOutcomePreviewHtmlEvent(
+  event: DiceEventSpecEvent,
+  settings: DicePluginSettingsEvent,
+  escapeHtmlEvent: (input: string) => string
+): string {
+  if (!settings.enableOutcomeBranches || !settings.showOutcomePreviewInListCard) return "";
+  const success = event.outcomes?.success?.trim() || "未设置";
+  const failure = event.outcomes?.failure?.trim() || "未设置";
+  const explode = settings.enableExplodeOutcomeBranch
+    ? event.outcomes?.explode?.trim() || "未设置"
+    : "已关闭";
+
+  return `
+    <div style="margin-top:8px; margin-bottom:12px; padding:12px; border:1px solid rgba(197,160,89,0.3); border-radius:6px; background:linear-gradient(135deg, rgba(30,30,30,0.6) 0%, rgba(15,15,15,0.8) 100%); font-size:12px; line-height:1.6; box-shadow:inset 0 1px 4px rgba(0,0,0,0.5);">
+      <div style="margin-bottom:10px; font-weight:600; color:#d1b67f; font-size:11px; letter-spacing:1px; display:flex; align-items:center;">
+        <span style="flex-grow:1; height:1px; background:linear-gradient(90deg, transparent, rgba(197,160,89,0.4)); margin-right:8px;"></span>
+        ✦ 走向预览 ✦
+        <span style="margin-left:8px; flex-grow:1; height:1px; background:linear-gradient(270deg, transparent, rgba(197,160,89,0.4));"></span>
+      </div>
+      <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(82,196,26,0.15); border:1px solid rgba(82,196,26,0.4); border-radius:4px; color:#73d13d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(82,196,26,0.1);">成功</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(success)}</span>
+      </div>
+      <div style="display:flex; margin-bottom:6px; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(255,77,79,0.15); border:1px solid rgba(255,77,79,0.4); border-radius:4px; color:#ff7875; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(255,77,79,0.1);">失败</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(failure)}</span>
+      </div>
+      <div style="display:flex; align-items:flex-start;">
+        <span style="display:inline-block; padding:0 6px; margin-right:10px; background:rgba(250,173,20,0.15); border:1px solid rgba(250,173,20,0.4); border-radius:4px; color:#ffc53d; font-size:10px; font-family:monospace; line-height:1.6; white-space:nowrap; user-select:none; box-shadow:0 0 4px rgba(250,173,20,0.1);">爆骰</span>
+        <span style="color:#e0e0e0; flex:1; word-break:break-word;">${escapeHtmlEvent(explode)}</span>
+      </div>
+    </div>
+  `;
+}
+
+export function outcomeKindLabelEvent(kind: EventOutcomeKindEvent): string {
+  if (kind === "explode") return "爆骰走向";
+  if (kind === "success") return "成功走向";
+  if (kind === "failure") return "失败走向";
+  return "剧情走向";
+}
+
+export interface BuildEventListCardDepsEvent {
+  getSettingsEvent: () => DicePluginSettingsEvent;
+  ensureRoundEventTimersSyncedEvent: (round: PendingRoundEvent) => void;
+  getLatestRollRecordForEvent: (
+    round: PendingRoundEvent,
+    eventId: string
+  ) => EventRollRecordEvent | null;
+  getEventRuntimeViewStateEvent: (
+    round: PendingRoundEvent,
+    event: DiceEventSpecEvent,
+    now?: number
+  ) => EventRuntimeViewStateEvent;
+  getRuntimeToneStyleEvent: (tone: EventRuntimeToneEvent) => {
+    border: string;
+    background: string;
+    color: string;
+  };
+  buildEventRolledPrefixTemplateEvent: (isTimeout: boolean) => string;
+  buildEventRolledBlockTemplateEvent: (rolledPrefixHtml: string, summaryHtml: string) => string;
+  formatRollRecordSummaryEvent: (
+    record: EventRollRecordEvent,
+    event?: DiceEventSpecEvent
+  ) => string;
+  parseDiceExpression: (exprRaw: string) => {
+    count: number;
+    sides: number;
+    modifier: number;
+    explode: boolean;
+  };
+  resolveSkillModifierBySkillNameEvent: (
+    skillName: string,
+    settings?: DicePluginSettingsEvent
+  ) => number;
+  formatEventModifierBreakdownEvent: (
+    baseModifier: number,
+    skillModifier: number,
+    finalModifier: number
+  ) => string;
+  buildEventRollButtonTemplateEvent: (params: {
+    roundIdAttr: string;
+    eventIdAttr: string;
+    diceExprAttr: string;
+    buttonDisabledAttr: string;
+    buttonStateStyle: string;
+  }) => string;
+  buildEventListItemTemplateEvent: (params: {
+    titleHtml: string;
+    eventIdHtml: string;
+    descHtml: string;
+    targetHtml: string;
+    skillHtml: string;
+    modifierTextHtml: string;
+    checkDiceHtml: string;
+    compareHtml: string;
+    dcText: string;
+    timeLimitHtml: string;
+    roundIdAttr: string;
+    eventIdAttr: string;
+    deadlineAttr: string;
+    runtimeTextHtml: string;
+    runtimeBorder: string;
+    runtimeBackground: string;
+    runtimeColor: string;
+    rolledBlockHtml: string;
+    outcomePreviewHtml: string;
+    commandTextHtml: string;
+    rollButtonHtml: string;
+  }) => string;
+  buildEventListCardTemplateEvent: (roundIdHtml: string, itemsHtml: string) => string;
+  escapeHtmlEvent: (input: string) => string;
+  escapeAttrEvent: (input: string) => string;
+}
+
+export function buildEventListCardEvent(
+  round: PendingRoundEvent,
+  deps: BuildEventListCardDepsEvent
+): string {
+  const settings = deps.getSettingsEvent();
+  deps.ensureRoundEventTimersSyncedEvent(round);
+  const items = round.events
+    .map((event) => {
+      const compare = event.compare ?? ">=";
+      const lastRecord = deps.getLatestRollRecordForEvent(round, event.id);
+      const runtime = deps.getEventRuntimeViewStateEvent(round, event, Date.now());
+      const runtimeStyle = deps.getRuntimeToneStyleEvent(runtime.tone);
+
+      const rolledPrefix = deps.buildEventRolledPrefixTemplateEvent(
+        lastRecord?.source === "timeout_auto_fail"
+      );
+
+      const rolledBlock = lastRecord
+        ? deps.buildEventRolledBlockTemplateEvent(
+            rolledPrefix,
+            deps.escapeHtmlEvent(deps.formatRollRecordSummaryEvent(lastRecord, event))
+          )
+        : "";
+      const outcomePreviewHtml = buildOutcomePreviewHtmlEvent(event, settings, deps.escapeHtmlEvent);
+
+      const deadlineAttr =
+        typeof event.deadlineAt === "number" && Number.isFinite(event.deadlineAt)
+          ? String(event.deadlineAt)
+          : "";
+      const buttonDisabled = runtime.locked ? "disabled" : "";
+      const buttonStateStyle = runtime.locked
+        ? "opacity:0.4;cursor:not-allowed;filter:grayscale(1);"
+        : "cursor:pointer;";
+      const showRollButton = !runtime.locked && !lastRecord;
+      const timeLimitLabel = settings.enableTimeLimit ? (event.timeLimit ? event.timeLimit : "none") : "off";
+      let baseModifierUsed = 0;
+      try {
+        baseModifierUsed = deps.parseDiceExpression(event.checkDice).modifier;
+      } catch {
+        baseModifierUsed = 0;
+      }
+      const skillModifierApplied = deps.resolveSkillModifierBySkillNameEvent(event.skill, settings);
+      const finalModifierUsed = baseModifierUsed + skillModifierApplied;
+      const modifierText = settings.enableSkillSystem
+        ? deps.formatEventModifierBreakdownEvent(
+            baseModifierUsed,
+            skillModifierApplied,
+            finalModifierUsed
+          )
+        : "";
+
+      const rollButtonHtml = showRollButton
+        ? deps.buildEventRollButtonTemplateEvent({
+            roundIdAttr: deps.escapeAttrEvent(round.roundId),
+            eventIdAttr: deps.escapeAttrEvent(event.id),
+            diceExprAttr: deps.escapeAttrEvent(event.checkDice),
+            buttonDisabledAttr: buttonDisabled,
+            buttonStateStyle,
+          })
+        : "";
+
+      return deps.buildEventListItemTemplateEvent({
+        titleHtml: deps.escapeHtmlEvent(event.title),
+        eventIdHtml: deps.escapeHtmlEvent(event.id),
+        descHtml: deps.escapeHtmlEvent(event.desc),
+        targetHtml: deps.escapeHtmlEvent(event.targetLabel),
+        skillHtml: deps.escapeHtmlEvent(event.skill),
+        modifierTextHtml: deps.escapeHtmlEvent(modifierText),
+        checkDiceHtml: deps.escapeHtmlEvent(event.checkDice),
+        compareHtml: deps.escapeHtmlEvent(compare),
+        dcText: String(event.dc),
+        timeLimitHtml: deps.escapeHtmlEvent(timeLimitLabel),
+        roundIdAttr: deps.escapeAttrEvent(round.roundId),
+        eventIdAttr: deps.escapeAttrEvent(event.id),
+        deadlineAttr: deps.escapeAttrEvent(deadlineAttr),
+        runtimeTextHtml: deps.escapeHtmlEvent(runtime.text),
+        runtimeBorder: runtimeStyle.border,
+        runtimeBackground: runtimeStyle.background,
+        runtimeColor: runtimeStyle.color,
+        rolledBlockHtml: rolledBlock,
+        outcomePreviewHtml,
+        commandTextHtml: `/eventroll roll ${deps.escapeHtmlEvent(event.id)}`,
+        rollButtonHtml,
+      });
+    })
+    .join("");
+
+  return deps.buildEventListCardTemplateEvent(deps.escapeHtmlEvent(round.roundId), items);
+}
+
+export interface BuildAnimatedDiceVisualBlockDepsEvent {
+  getDiceSvg: (value: number, sides: number, color: string, size?: number) => string;
+  getRollingSvg: (color: string, size?: number) => string;
+  buildAlreadyRolledDiceVisualTemplateEvent: (params: {
+    uniqueId: string;
+    rollingVisualHtml: string;
+    diceVisualsHtml: string;
+    critType: "success" | "fail" | "normal";
+    critText: string;
+    compactMode: boolean;
+  }) => string;
+}
+
+export function buildAnimatedDiceVisualBlockEvent(
+  result: DiceResult | null | undefined,
+  deps: BuildAnimatedDiceVisualBlockDepsEvent,
+  compactMode = false
+): string {
+  if (!result || !Array.isArray(result.rolls) || result.rolls.length === 0) {
+    return "";
+  }
+
+  const uniqueId = "d" + Math.random().toString(36).substr(2, 9);
+  let critType: "success" | "fail" | "normal" = "normal";
+  let critText = "";
+  let resultColor = "#ffdb78";
+
+  if (result.count === 1) {
+    const val = result.rolls[0];
+    const maxVal = result.sides;
+    if (val === maxVal) {
+      critType = "success";
+      critText = "大成功!";
+      resultColor = "#52c41a";
+    } else if (val === 1) {
+      critType = "fail";
+      critText = "大失败!";
+      resultColor = "#ff4d4f";
+    }
+  }
+
+  const showDiceSvgs = result.rolls.length <= 5;
+  const diceSize = compactMode ? 62 : 68;
+  const rollingSize = compactMode ? 52 : 58;
+  const diceVisuals = showDiceSvgs
+    ? result.rolls.map((r) => deps.getDiceSvg(r, result.sides, resultColor, diceSize)).join(" ")
+    : deps.getDiceSvg(0, result.sides, resultColor, diceSize);
+  const rollingVisual = deps.getRollingSvg("#ffdb78", rollingSize);
+
+  return deps.buildAlreadyRolledDiceVisualTemplateEvent({
+    uniqueId,
+    rollingVisualHtml: rollingVisual,
+    diceVisualsHtml: diceVisuals,
+    critType,
+    critText,
+    compactMode,
+  });
+}
+
+export interface BuildEventRollResultCardDepsEvent {
+  getSettingsEvent: () => DicePluginSettingsEvent;
+  resolveTriggeredOutcomeEvent: (
+    event: DiceEventSpecEvent,
+    record: EventRollRecordEvent | null | undefined,
+    settings: DicePluginSettingsEvent
+  ) => ResolvedOutcomeEvent;
+  formatEventModifierBreakdownEvent: (
+    baseModifier: number,
+    skillModifier: number,
+    finalModifier: number
+  ) => string;
+  buildRollsSummaryTemplateEvent: (rollsHtml: string, modifierHtml: string) => string;
+  formatModifier: (mod: number) => string;
+  buildEventRollResultCardTemplateEvent: (params: {
+    rollIdHtml: string;
+    titleHtml: string;
+    eventIdHtml: string;
+    sourceHtml: string;
+    targetHtml: string;
+    skillHtml: string;
+    diceExprHtml: string;
+    rollsSummaryHtml: string;
+    modifierBreakdownHtml: string;
+    compareHtml: string;
+    dcText: string;
+    statusText: string;
+    statusColor: string;
+    totalText: string;
+    timeLimitHtml: string;
+    diceVisualBlockHtml: string;
+    outcomeLabelHtml: string;
+    outcomeTextHtml: string;
+  }) => string;
+  escapeHtmlEvent: (input: string) => string;
+  getDiceSvg: (value: number, sides: number, color: string, size?: number) => string;
+  getRollingSvg: (color: string, size?: number) => string;
+  buildAlreadyRolledDiceVisualTemplateEvent: (params: {
+    uniqueId: string;
+    rollingVisualHtml: string;
+    diceVisualsHtml: string;
+    critType: "success" | "fail" | "normal";
+    critText: string;
+    compactMode: boolean;
+  }) => string;
+}
+
+export function buildEventRollResultCardEvent(
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent,
+  deps: BuildEventRollResultCardDepsEvent
+): string {
+  const settings = deps.getSettingsEvent();
+  const resolvedOutcome = deps.resolveTriggeredOutcomeEvent(event, record, settings);
+  const outcomeLabel = settings.enableOutcomeBranches
+    ? outcomeKindLabelEvent(resolvedOutcome.kind)
+    : "剧情走向";
+  const outcomeText = settings.enableOutcomeBranches ? resolvedOutcome.text : "走向分支已关闭。";
+  const status = record.success === null ? "PENDING" : record.success ? "判定成功" : "判定失败";
+  const statusColor = record.success === null ? "#ffdb78" : record.success ? "#52c41a" : "#ff4d4f";
+
+  const sourceText =
+    record.source === "timeout_auto_fail"
+      ? "超时自动检定"
+      : record.source === "ai_auto_roll"
+      ? "AI 自动检定"
+      : "主动检定";
+  const diceVisualBlock =
+    record.source === "timeout_auto_fail"
+      ? ""
+      : buildAnimatedDiceVisualBlockEvent(
+          record.result,
+          {
+            getDiceSvg: deps.getDiceSvg,
+            getRollingSvg: deps.getRollingSvg,
+            buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
+          },
+          true
+        );
+  const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
+    ? Number(record.baseModifierUsed)
+    : Number(record.result.modifier) || 0;
+  const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
+    ? Number(record.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
+    ? Number(record.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
+  const modifierBreakdownHtml = settings.enableSkillSystem
+    ? deps.formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
+    : "";
+
+  return deps.buildEventRollResultCardTemplateEvent({
+    rollIdHtml: deps.escapeHtmlEvent(record.rollId),
+    titleHtml: deps.escapeHtmlEvent(event.title),
+    eventIdHtml: deps.escapeHtmlEvent(event.id),
+    sourceHtml: deps.escapeHtmlEvent(sourceText),
+    targetHtml: deps.escapeHtmlEvent(record.targetLabelUsed || event.targetLabel),
+    skillHtml: deps.escapeHtmlEvent(event.skill),
+    diceExprHtml: deps.escapeHtmlEvent(record.diceExpr),
+    rollsSummaryHtml: deps.buildRollsSummaryTemplateEvent(
+      deps.escapeHtmlEvent(record.result.rolls.join(", ")),
+      deps.escapeHtmlEvent(deps.formatModifier(record.result.modifier))
+    ),
+    modifierBreakdownHtml: deps.escapeHtmlEvent(modifierBreakdownHtml),
+    compareHtml: deps.escapeHtmlEvent(record.compareUsed),
+    dcText: String(record.dcUsed ?? "N/A"),
+    statusText: status,
+    statusColor,
+    totalText: String(record.result.total),
+    timeLimitHtml: deps.escapeHtmlEvent(event.timeLimit ?? "NONE"),
+    diceVisualBlockHtml: diceVisualBlock,
+    outcomeLabelHtml: deps.escapeHtmlEvent(outcomeLabel),
+    outcomeTextHtml: deps.escapeHtmlEvent(outcomeText),
+  });
+}
+
+export interface BuildEventAlreadyRolledCardDepsEvent {
+  getSettingsEvent: () => DicePluginSettingsEvent;
+  resolveTriggeredOutcomeEvent: (
+    event: DiceEventSpecEvent,
+    record: EventRollRecordEvent | null | undefined,
+    settings: DicePluginSettingsEvent
+  ) => ResolvedOutcomeEvent;
+  formatEventModifierBreakdownEvent: (
+    baseModifier: number,
+    skillModifier: number,
+    finalModifier: number
+  ) => string;
+  buildEventDistributionBlockTemplateEvent: (rollsHtml: string, modifierHtml: string) => string;
+  buildEventTimeoutAtBlockTemplateEvent: (timeoutIsoHtml: string) => string;
+  buildEventAlreadyRolledCardTemplateEvent: (params: {
+    titleTextHtml: string;
+    rollIdHtml: string;
+    eventTitleHtml: string;
+    eventIdHtml: string;
+    sourceTextHtml: string;
+    targetHtml: string;
+    modifierBreakdownHtml: string;
+    compareHtml: string;
+    dcText: string;
+    statusText: string;
+    statusColor: string;
+    diceVisualBlockHtml: string;
+    distributionBlockHtml: string;
+    outcomeLabelHtml: string;
+    outcomeTextHtml: string;
+    timeoutBlockHtml: string;
+  }) => string;
+  escapeHtmlEvent: (input: string) => string;
+  formatModifier: (mod: number) => string;
+  getDiceSvg: (value: number, sides: number, color: string, size?: number) => string;
+  getRollingSvg: (color: string, size?: number) => string;
+  buildAlreadyRolledDiceVisualTemplateEvent: (params: {
+    uniqueId: string;
+    rollingVisualHtml: string;
+    diceVisualsHtml: string;
+    critType: "success" | "fail" | "normal";
+    critText: string;
+    compactMode: boolean;
+  }) => string;
+}
+
+export function buildEventAlreadyRolledCardEvent(
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent,
+  deps: BuildEventAlreadyRolledCardDepsEvent
+): string {
+  const settings = deps.getSettingsEvent();
+  const resolvedOutcome = deps.resolveTriggeredOutcomeEvent(event, record, settings);
+  const outcomeLabel = settings.enableOutcomeBranches
+    ? outcomeKindLabelEvent(resolvedOutcome.kind)
+    : "剧情走向";
+  const outcomeText = settings.enableOutcomeBranches ? resolvedOutcome.text : "走向分支已关闭。";
+  const isTimeout = record.source === "timeout_auto_fail";
+  const titleText = isTimeout ? "✦ 事件已超时 ✦" : "✦ 检定已完成 ✦";
+  const sourceText = isTimeout
+    ? "系统强制结算"
+    : record.source === "ai_auto_roll"
+    ? "AI 自动检定"
+    : "玩家主动检定";
+  const statusText = record.success === null ? "未决" : record.success ? "成功" : "失败";
+  const statusColor = record.success === null ? "#a3957a" : record.success ? "#52c41a" : "#ff4d4f";
+
+  const diceVisualBlock = isTimeout
+    ? ""
+    : buildAnimatedDiceVisualBlockEvent(record.result, {
+        getDiceSvg: deps.getDiceSvg,
+        getRollingSvg: deps.getRollingSvg,
+        buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
+      });
+  const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
+    ? Number(record.baseModifierUsed)
+    : Number(record.result.modifier) || 0;
+  const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
+    ? Number(record.skillModifierApplied)
+    : 0;
+  const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
+    ? Number(record.finalModifierUsed)
+    : baseModifierUsed + skillModifierApplied;
+  const modifierBreakdownHtml = settings.enableSkillSystem
+    ? deps.formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
+    : "";
+
+  const distributionBlock = !isTimeout && record.result
+    ? deps.buildEventDistributionBlockTemplateEvent(
+        deps.escapeHtmlEvent(record.result.rolls.join(", ")),
+        deps.escapeHtmlEvent(deps.formatModifier(record.result.modifier))
+      )
+    : "";
+  const timeoutBlock = record.timeoutAt
+    ? deps.buildEventTimeoutAtBlockTemplateEvent(
+        deps.escapeHtmlEvent(new Date(record.timeoutAt).toISOString())
+      )
+    : "";
+
+  return deps.buildEventAlreadyRolledCardTemplateEvent({
+    titleTextHtml: titleText,
+    rollIdHtml: deps.escapeHtmlEvent(record.rollId),
+    eventTitleHtml: deps.escapeHtmlEvent(event.title),
+    eventIdHtml: deps.escapeHtmlEvent(event.id),
+    sourceTextHtml: deps.escapeHtmlEvent(sourceText),
+    targetHtml: deps.escapeHtmlEvent(record.targetLabelUsed || event.targetLabel),
+    modifierBreakdownHtml: deps.escapeHtmlEvent(modifierBreakdownHtml),
+    compareHtml: deps.escapeHtmlEvent(record.compareUsed),
+    dcText: String(record.dcUsed ?? "N/A"),
+    statusText,
+    statusColor,
+    diceVisualBlockHtml: diceVisualBlock,
+    distributionBlockHtml: distributionBlock,
+    outcomeLabelHtml: deps.escapeHtmlEvent(outcomeLabel),
+    outcomeTextHtml: deps.escapeHtmlEvent(outcomeText),
+    timeoutBlockHtml: timeoutBlock,
+  });
+}
