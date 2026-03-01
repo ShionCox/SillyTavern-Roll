@@ -1,346 +1,709 @@
 import { normalizeBlankLinesEvent, simpleHashEvent } from "../core/utilsEvent";
+import { buildActiveStatusesBlockEvent, ensureActiveStatusesEvent as ensureActiveStatusesFromMetaEvent } from "./statusEvent";
 import type {
   DiceMetaEvent,
   DicePluginSettingsEvent,
+  EventResultGradeEvent,
+  PendingResultGuidanceEvent,
   RoundSummarySnapshotEvent,
-  SkillPresetEvent,
-  SkillPresetStoreEvent,
   TavernMessageEvent,
 } from "../types/eventDomainEvent";
 
-export function getMessageTextEvent(message: TavernMessageEvent | undefined): string {
-  if (!message) return "";
-  const content = typeof message.content === "string" ? message.content : "";
-  const mes = typeof message.mes === "string" ? message.mes : "";
-  if (content && mes) {
-    return content.length >= mes.length ? content : mes;
+const DEFAULT_RULE_BLOCK_START_Event = "<dice_rules>";
+const DEFAULT_RULE_BLOCK_END_Event = "</dice_rules>";
+const DEFAULT_SUMMARY_BLOCK_START_Event = "<dice_round_summary>";
+const DEFAULT_SUMMARY_BLOCK_END_Event = "</dice_round_summary>";
+const DEFAULT_RESULT_GUIDANCE_BLOCK_START_Event = "<dice_result_guidance>";
+const DEFAULT_RESULT_GUIDANCE_BLOCK_END_Event = "</dice_result_guidance>";
+const DEFAULT_RUNTIME_POLICY_BLOCK_START_Event = "<dice_runtime_policy>";
+const DEFAULT_RUNTIME_POLICY_BLOCK_END_Event = "</dice_runtime_policy>";
+const DEFAULT_ACTIVE_STATUSES_BLOCK_START_Event = "<dice_active_statuses>";
+const DEFAULT_ACTIVE_STATUSES_BLOCK_END_Event = "</dice_active_statuses>";
+
+function normalizeTextEvent(raw: any): string {
+  return String(raw ?? "");
+}
+
+function normalizeInlineTextEvent(raw: any): string {
+  return String(raw ?? "").replace(/\s+/g, " ").trim();
+}
+
+function escapeRegexEvent(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeBlockTextEvent(input: string): string {
+  return normalizeBlankLinesEvent(String(input || ""));
+}
+
+function getBlockTagsEvent(
+  tags?: Partial<{
+    ruleStart: string;
+    ruleEnd: string;
+    runtimePolicyStart: string;
+    runtimePolicyEnd: string;
+    summaryStart: string;
+    summaryEnd: string;
+    guidanceStart: string;
+    guidanceEnd: string;
+    statusesStart: string;
+    statusesEnd: string;
+  }>
+): { start: string; end: string }[] {
+  const ruleStart = tags?.ruleStart || DEFAULT_RULE_BLOCK_START_Event;
+  const ruleEnd = tags?.ruleEnd || DEFAULT_RULE_BLOCK_END_Event;
+  const runtimePolicyStart = tags?.runtimePolicyStart || DEFAULT_RUNTIME_POLICY_BLOCK_START_Event;
+  const runtimePolicyEnd = tags?.runtimePolicyEnd || DEFAULT_RUNTIME_POLICY_BLOCK_END_Event;
+  const summaryStart = tags?.summaryStart || DEFAULT_SUMMARY_BLOCK_START_Event;
+  const summaryEnd = tags?.summaryEnd || DEFAULT_SUMMARY_BLOCK_END_Event;
+  const guidanceStart = tags?.guidanceStart || DEFAULT_RESULT_GUIDANCE_BLOCK_START_Event;
+  const guidanceEnd = tags?.guidanceEnd || DEFAULT_RESULT_GUIDANCE_BLOCK_END_Event;
+  const statusesStart = tags?.statusesStart || DEFAULT_ACTIVE_STATUSES_BLOCK_START_Event;
+  const statusesEnd = tags?.statusesEnd || DEFAULT_ACTIVE_STATUSES_BLOCK_END_Event;
+  return [
+    { start: ruleStart, end: ruleEnd },
+    { start: runtimePolicyStart, end: runtimePolicyEnd },
+    { start: summaryStart, end: summaryEnd },
+    { start: guidanceStart, end: guidanceEnd },
+    { start: statusesStart, end: statusesEnd },
+  ];
+}
+
+function normalizeRoleEvent(message: TavernMessageEvent | undefined): string {
+  if (!message || typeof message !== "object") return "";
+  const role = String((message as any).role ?? "").trim().toLowerCase();
+  return role;
+}
+
+function getMessageArrayTextEvent(contentArray: any[]): string {
+  const lines: string[] = [];
+  for (const item of contentArray) {
+    if (typeof item === "string") {
+      lines.push(item);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const text = (item as any).text ?? (item as any).content ?? "";
+    if (typeof text === "string" && text) {
+      lines.push(text);
+    }
   }
-  if (content) return content;
-  if (mes) return mes;
+  return lines.join("\n");
+}
+
+function resolveMessageTimestampEvent(message: TavernMessageEvent | undefined): string {
+  if (!message || typeof message !== "object") return "";
+  const value =
+    (message as any).create_date ??
+    (message as any).create_time ??
+    (message as any).timestamp ??
+    "";
+  const normalized = String(value ?? "").trim();
+  return normalized;
+}
+
+function resolveMessageExplicitIdEvent(message: TavernMessageEvent | undefined): string {
+  if (!message || typeof message !== "object") return "";
+  const explicitId = (message as any).id ?? (message as any).cid ?? (message as any).uid;
+  if (explicitId == null) return "";
+  return String(explicitId);
+}
+
+function isArrayLikeMessageListEvent(raw: any): raw is any[] {
+  return Array.isArray(raw);
+}
+
+function formatGradeLabelEvent(grade: EventResultGradeEvent): string {
+  switch (grade) {
+    case "critical_success":
+      return "大成功";
+    case "partial_success":
+      return "勉强成功";
+    case "success":
+      return "成功";
+    case "failure":
+      return "失败";
+    case "critical_failure":
+      return "大失败";
+    default:
+      return "结果";
+  }
+}
+
+function buildResultGuidanceInstructionEvent(item: PendingResultGuidanceEvent): string {
+  const title = item.eventTitle || item.eventId;
+  switch (item.resultGrade) {
+    case "critical_success":
+      return `玩家在「${title}」中掷出大成功，请用英雄化、戏剧性的口吻描述其完美完成动作，并给出额外收益。`;
+    case "partial_success":
+      return `玩家在「${title}」中勉强成功，请描述“成功但有代价”，代价可包含受伤、暴露、资源损失或引来威胁。`;
+    case "success":
+      return `玩家在「${title}」中成功，请给出稳定推进的叙事结果，避免额外惩罚。`;
+    case "failure":
+      return `玩家在「${title}」中失败，请描述受阻但剧情继续推进，可引入新的困难或替代路径。`;
+    case "critical_failure":
+      return `玩家在「${title}」中大失败，请描述显著且可感知的严重后果，同时保持后续可行动性。`;
+    default:
+      return `玩家在「${title}」中完成检定，请根据结果推进叙事。`;
+  }
+}
+
+function buildResultGuidanceTextEvent(
+  queue: PendingResultGuidanceEvent[],
+  guidanceStartTag: string,
+  guidanceEndTag: string
+): string {
+  if (!Array.isArray(queue) || queue.length === 0) return "";
+  const lines: string[] = [];
+  lines.push(guidanceStartTag);
+  lines.push(`v=1 count=${queue.length}`);
+  for (const item of queue) {
+    const gradeLabel = formatGradeLabelEvent(item.resultGrade);
+    const compareText = `${item.compareUsed} ${item.dcUsed == null ? "N/A" : item.dcUsed}`;
+    const marginText = item.marginToDc == null ? "N/A" : String(item.marginToDc);
+    const advantageText = item.advantageStateApplied || "normal";
+    lines.push(
+      `- [${gradeLabel}] event="${normalizeInlineTextEvent(item.eventTitle)}" target="${normalizeInlineTextEvent(
+        item.targetLabel
+      )}" total=${item.total} check=${compareText} margin=${marginText} advantage=${advantageText}`
+    );
+    lines.push(`  instruction: ${buildResultGuidanceInstructionEvent(item)}`);
+  }
+  lines.push(guidanceEndTag);
+  return normalizeBlockTextEvent(lines.join("\n"));
+}
+
+export function getMessageTextEvent(message: TavernMessageEvent | undefined): string {
+  if (!message || typeof message !== "object") return "";
+
+  if (typeof (message as any).content === "string") {
+    return (message as any).content;
+  }
+  if (Array.isArray((message as any).content)) {
+    return getMessageArrayTextEvent((message as any).content);
+  }
+  if (
+    (message as any).content &&
+    typeof (message as any).content === "object" &&
+    typeof (message as any).content.text === "string"
+  ) {
+    return String((message as any).content.text);
+  }
+  if (typeof (message as any).mes === "string") {
+    return (message as any).mes;
+  }
+  if (typeof (message as any).text === "string") {
+    return (message as any).text;
+  }
+
   return "";
 }
 
-export function getPreferredAssistantSourceTextEvent(
-  message: TavernMessageEvent | undefined
-): string {
-  if (!message) return "";
-  const candidates = [
-    typeof message.mes === "string" ? message.mes : "",
-    typeof message.content === "string" ? message.content : "",
-    typeof (message as any).message === "string" ? (message as any).message : "",
-    typeof (message as any).text === "string" ? (message as any).text : "",
-  ];
-  for (const candidate of candidates) {
-    if (candidate && candidate.trim()) return candidate;
+export function getPreferredAssistantSourceTextEvent(message: TavernMessageEvent | undefined): string {
+  if (!message || typeof message !== "object") return "";
+  const swipeId = Number((message as any).swipe_id ?? (message as any).swipeId);
+  const swipes = (message as any).swipes;
+  if (Array.isArray(swipes) && Number.isFinite(swipeId) && swipeId >= 0 && swipeId < swipes.length) {
+    const swipeText = String(swipes[swipeId] ?? "");
+    if (swipeText.trim()) return swipeText;
   }
-  return "";
+  if (typeof (message as any).mes === "string" && (message as any).mes.trim()) {
+    return (message as any).mes;
+  }
+  return getMessageTextEvent(message);
 }
 
 export function setMessageTextEvent(message: TavernMessageEvent, text: string): void {
-  message.mes = text;
-  message.content = text;
-  (message as any).message = text;
-  (message as any).text = text;
+  if (!message || typeof message !== "object") return;
+  const nextText = normalizeTextEvent(text);
+
+  const hasContentField = Object.prototype.hasOwnProperty.call(message, "content");
+  const hasMesField = Object.prototype.hasOwnProperty.call(message, "mes");
+  if (hasContentField) {
+    (message as any).content = nextText;
+  }
+  if (hasMesField) {
+    (message as any).mes = nextText;
+  }
+  if (!hasContentField && !hasMesField) {
+    (message as any).content = nextText;
+  }
 }
 
 export function isUserMessageEvent(message: TavernMessageEvent | undefined): boolean {
-  if (!message) return false;
-  if (message.is_user) return true;
-  return String(message.role || "").toLowerCase() === "user";
+  if (!message || typeof message !== "object") return false;
+  if ((message as any).is_user === true) return true;
+  const role = normalizeRoleEvent(message);
+  return role === "user";
 }
 
 export function isSystemMessageEvent(message: TavernMessageEvent | undefined): boolean {
-  if (!message) return false;
-  if (message.is_system) return true;
-  return String(message.role || "").toLowerCase() === "system";
+  if (!message || typeof message !== "object") return false;
+  if ((message as any).is_system === true) return true;
+  const role = normalizeRoleEvent(message);
+  return role === "system";
 }
 
 export function isAssistantMessageEvent(message: TavernMessageEvent | undefined): boolean {
-  if (!message) return false;
-  if (message.is_user || message.is_system) return false;
-  const role = String(message.role || "").toLowerCase();
-  if (!role) return true;
-  return role !== "user" && role !== "system";
+  if (!message || typeof message !== "object") return false;
+  if (isUserMessageEvent(message) || isSystemMessageEvent(message)) return false;
+  const role = normalizeRoleEvent(message);
+  if (role) return role === "assistant";
+  return true;
 }
 
 export function findFirstSystemIndexEvent(chat: TavernMessageEvent[]): number {
+  if (!Array.isArray(chat)) return -1;
   for (let i = 0; i < chat.length; i++) {
     if (isSystemMessageEvent(chat[i])) return i;
   }
   return -1;
 }
 
-export function findLastUserMessageEvent(chat: TavernMessageEvent[]): TavernMessageEvent | null {
+export function findLastSystemIndexEvent(chat: TavernMessageEvent[]): number {
+  if (!Array.isArray(chat)) return -1;
   for (let i = chat.length - 1; i >= 0; i--) {
-    if (isUserMessageEvent(chat[i])) return chat[i];
+    if (isSystemMessageEvent(chat[i])) return i;
+  }
+  return -1;
+}
+
+export function findLastUserIndexEvent(chat: TavernMessageEvent[]): number {
+  if (!Array.isArray(chat)) return -1;
+  for (let i = chat.length - 1; i >= 0; i--) {
+    if (isUserMessageEvent(chat[i])) return i;
+  }
+  return -1;
+}
+
+export function findLastUserMessageEvent(chat: TavernMessageEvent[]): TavernMessageEvent | null {
+  const idx = findLastUserIndexEvent(chat);
+  if (idx < 0) return null;
+  return chat[idx] || null;
+}
+
+export function buildPromptMessageIdEvent(message: TavernMessageEvent, index: number): string {
+  const baseText = getMessageTextEvent(message);
+  return buildPromptMessageIdByTextEvent(baseText, message, index);
+}
+
+function buildPromptMessageIdByTextEvent(
+  baseTextRaw: string,
+  message: TavernMessageEvent,
+  index: number
+): string {
+  const baseText = String(baseTextRaw ?? "");
+  const hash = simpleHashEvent(baseText);
+  const explicitId = resolveMessageExplicitIdEvent(message);
+  if (explicitId) {
+    return `prompt_user:${explicitId}:${hash}`;
+  }
+  const ts = resolveMessageTimestampEvent(message);
+  if (ts) {
+    return `prompt_user_ts:${ts}:${hash}`;
+  }
+  return `prompt_user_idx:${index}:${hash}`;
+}
+
+export function stripManagedBlocksEvent(
+  text: string,
+  tags?: Partial<{
+    ruleStart: string;
+    ruleEnd: string;
+    runtimePolicyStart: string;
+    runtimePolicyEnd: string;
+    summaryStart: string;
+    summaryEnd: string;
+    guidanceStart: string;
+    guidanceEnd: string;
+    statusesStart: string;
+    statusesEnd: string;
+  }>
+): string {
+  let next = normalizeTextEvent(text);
+  for (const tag of getBlockTagsEvent(tags)) {
+    const pattern = new RegExp(`${escapeRegexEvent(tag.start)}[\\s\\S]*?${escapeRegexEvent(tag.end)}`, "gi");
+    next = next.replace(pattern, "\n");
+  }
+  return normalizeBlockTextEvent(next);
+}
+
+export function buildDiceRuleBlockEvent(ruleText: string, ruleStartTag: string, ruleEndTag: string): string {
+  const raw = normalizeTextEvent(ruleText).trim();
+  if (!raw) return "";
+  if (raw.includes(ruleStartTag) && raw.includes(ruleEndTag)) {
+    return normalizeBlockTextEvent(raw);
+  }
+  return normalizeBlockTextEvent(`${ruleStartTag}\n${raw}\n${ruleEndTag}`);
+}
+
+function parseAllowedSidesTextEvent(raw: string): string {
+  const parts = String(raw || "")
+    .split(/[,\s]+/)
+    .map((item) => Number(String(item || "").trim()))
+    .filter((value) => Number.isFinite(value) && Number.isInteger(value) && value > 0);
+  if (parts.length <= 0) return "none";
+  return Array.from(new Set(parts)).sort((a, b) => a - b).join(",");
+}
+
+function parseSkillTablePreviewEvent(skillTableText: string, limit = 20): { count: number; preview: string } {
+  try {
+    const parsed = JSON.parse(String(skillTableText || "{}"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { count: 0, preview: "empty" };
+    }
+    const entries = Object.entries(parsed as Record<string, any>)
+      .filter(([name, value]) => String(name || "").trim().length > 0 && Number.isFinite(Number(value)))
+      .map(([name, value]) => [String(name).trim(), Number(value)] as [string, number]);
+    if (entries.length <= 0) {
+      return { count: 0, preview: "empty" };
+    }
+    const preview = entries
+      .slice(0, Math.max(1, limit))
+      .map(([name, value]) => `${normalizeInlineTextEvent(name)}:${value}`)
+      .join(",");
+    return { count: entries.length, preview: preview || "empty" };
+  } catch {
+    return { count: 0, preview: "invalid_json" };
+  }
+}
+
+function buildDiceRuntimePolicyBlockEvent(
+  settings: DicePluginSettingsEvent,
+  startTag: string,
+  endTag: string
+): string {
+  const allowedSides = parseAllowedSidesTextEvent(settings.aiAllowedDiceSidesText);
+  const skillPreview = parseSkillTablePreviewEvent(settings.skillTableText);
+  const lines: string[] = [];
+  lines.push(startTag);
+  lines.push("v=1");
+  lines.push(`apply_scope=${settings.eventApplyScope}`);
+  lines.push(`round_mode=${settings.enableAiRoundControl ? "continuous" : "per_round"}`);
+  lines.push(`roll_mode_allowed=${settings.enableAiRollMode ? "auto|manual" : "manual_only"}`);
+  lines.push(`ai_round_control_enabled=${settings.enableAiRoundControl ? 1 : 0}`);
+  lines.push(
+    `round_control_allowed=${settings.enableAiRoundControl ? "continue|end_round" : "disabled"}`
+  );
+  lines.push(`explode_enabled=${settings.enableExplodingDice ? 1 : 0}`);
+  lines.push(`advantage_enabled=${settings.enableAdvantageSystem ? 1 : 0}`);
+  lines.push(`dynamic_dc_reason_enabled=${settings.enableDynamicDcReason ? 1 : 0}`);
+  lines.push(`status_system_enabled=${settings.enableStatusSystem ? 1 : 0}`);
+  lines.push(`status_tags_allowed=${settings.enableStatusSystem ? 1 : 0}`);
+  lines.push(`outcome_branches_enabled=${settings.enableOutcomeBranches ? 1 : 0}`);
+  lines.push(`explode_outcome_enabled=${settings.enableExplodeOutcomeBranch ? 1 : 0}`);
+  lines.push(`time_limit_enabled=${settings.enableTimeLimit ? 1 : 0}`);
+  lines.push(`min_time_limit_seconds=${Math.max(1, Math.floor(Number(settings.minTimeLimitSeconds) || 1))}`);
+  lines.push(`allowed_sides=${allowedSides}`);
+  lines.push(`skill_system_enabled=${settings.enableSkillSystem ? 1 : 0}`);
+  lines.push(`skill_table_count=${skillPreview.count}`);
+  lines.push(`skill_table_preview=${skillPreview.preview}`);
+  lines.push(`summary_detail=${settings.summaryDetailMode}`);
+  lines.push(`summary_rounds=${settings.summaryHistoryRounds}`);
+  lines.push(`summary_include_outcome=${settings.includeOutcomeInSummary ? 1 : 0}`);
+  lines.push(`list_outcome_preview=${settings.showOutcomePreviewInListCard ? 1 : 0}`);
+  lines.push(endTag);
+  return normalizeBlockTextEvent(lines.join("\n"));
+}
+
+export function composePromptInjectionsEvent(baseText: string, injections: string[]): string {
+  const head = normalizeBlockTextEvent(baseText);
+  const blocks = injections.map((item) => normalizeBlockTextEvent(item)).filter((item) => item.length > 0);
+  if (!blocks.length) return head;
+  if (!head) return blocks.join("\n\n");
+  return `${head}\n\n${blocks.join("\n\n")}`;
+}
+
+export function applyManagedSystemContentEvent(
+  message: TavernMessageEvent,
+  composedText: string,
+  tags?: Partial<{
+    ruleStart: string;
+    ruleEnd: string;
+    runtimePolicyStart: string;
+    runtimePolicyEnd: string;
+    summaryStart: string;
+    summaryEnd: string;
+    guidanceStart: string;
+    guidanceEnd: string;
+    statusesStart: string;
+    statusesEnd: string;
+  }>
+): void {
+  const currentText = getMessageTextEvent(message);
+  const stripped = stripManagedBlocksEvent(currentText, tags);
+  const nextText = composePromptInjectionsEvent(stripped, [composedText]);
+  setMessageTextEvent(message, nextText);
+}
+
+function resolvePromptGuidanceInjectionEvent(
+  meta: DiceMetaEvent,
+  settings: DicePluginSettingsEvent,
+  userMsgId: string,
+  isSameUserPrompt: boolean,
+  guidanceStartTag: string,
+  guidanceEndTag: string
+): { text: string; changedMeta: boolean } {
+  if (!settings.enableDynamicResultGuidance) {
+    if (meta.outboundResultGuidance) {
+      delete meta.outboundResultGuidance;
+      return { text: "", changedMeta: true };
+    }
+    return { text: "", changedMeta: false };
+  }
+
+  if (
+    isSameUserPrompt &&
+    meta.outboundResultGuidance &&
+    meta.outboundResultGuidance.userMsgId === userMsgId
+  ) {
+    return {
+      text: normalizeBlockTextEvent(meta.outboundResultGuidance.guidanceText),
+      changedMeta: false,
+    };
+  }
+
+  const queue = Array.isArray(meta.pendingResultGuidanceQueue)
+    ? meta.pendingResultGuidanceQueue
+    : [];
+  if (queue.length <= 0) {
+    if (meta.outboundResultGuidance) {
+      delete meta.outboundResultGuidance;
+      return { text: "", changedMeta: true };
+    }
+    return { text: "", changedMeta: false };
+  }
+
+  const consumed = queue.splice(0, queue.length);
+  const guidanceText = buildResultGuidanceTextEvent(consumed, guidanceStartTag, guidanceEndTag);
+  const lastRollId = consumed[consumed.length - 1]?.rollId || consumed[0]?.rollId || "";
+  meta.outboundResultGuidance = {
+    userMsgId,
+    rollId: lastRollId,
+    guidanceText,
+  };
+  return { text: guidanceText, changedMeta: true };
+}
+
+function upsertRoundSnapshotToHistoryEvent(
+  history: RoundSummarySnapshotEvent[],
+  snapshot: RoundSummarySnapshotEvent
+): boolean {
+  const idx = history.findIndex((item) => item.roundId === snapshot.roundId);
+  if (idx >= 0) {
+    history[idx] = snapshot;
+    return true;
+  }
+  history.push(snapshot);
+  return true;
+}
+
+export function extractPromptChatFromPayloadEvent(payload: any): TavernMessageEvent[] | null {
+  if (isArrayLikeMessageListEvent(payload)) {
+    return payload as TavernMessageEvent[];
+  }
+  if (!payload || typeof payload !== "object") return null;
+
+  const candidates = [
+    (payload as any).chat,
+    (payload as any).messages,
+    (payload as any).message_list,
+    (payload as any).prompt?.chat,
+    (payload as any).prompt?.messages,
+    (payload as any).data?.chat,
+    (payload as any).data?.messages,
+    (payload as any).chatCompletion?.messages,
+  ];
+  for (const item of candidates) {
+    if (isArrayLikeMessageListEvent(item)) {
+      return item as TavernMessageEvent[];
+    }
   }
   return null;
 }
 
-export function buildPromptMessageIdEvent(message: TavernMessageEvent): string {
-  const explicitId = message.id ?? message.cid ?? message.uid;
-  if (explicitId != null) return `msg:${String(explicitId)}`;
-  const stamp = String(
-    message.create_date ?? message.create_time ?? message.timestamp ?? ""
-  );
-  return `fp:${stamp}:${simpleHashEvent(getMessageTextEvent(message))}`;
-}
-
-export function stripManagedBlocksEvent(input: string): string {
-  return normalizeBlankLinesEvent(
-    input
-      .replace(
-        /\[DICE_EVENT_RULES\][\s\S]*?\[\/DICE_EVENT_RULES\]/g,
-        ""
-      )
-      .replace(
-        /\[DICE_ROUND_SUMMARY\][\s\S]*?\[\/DICE_ROUND_SUMMARY\]/g,
-        ""
-      )
-  );
-}
-
-export interface DiceRuleBlockDepsEvent {
+export interface HandlePromptReadyDepsEvent {
   getSettingsEvent: () => DicePluginSettingsEvent;
-  getSkillModifierTableMapEvent: (
-    settings: DicePluginSettingsEvent
-  ) => Record<string, number>;
-  getSkillPresetStoreEvent: (
-    settings: DicePluginSettingsEvent
-  ) => SkillPresetStoreEvent;
-  getActiveSkillPresetEvent: (store: SkillPresetStoreEvent) => SkillPresetEvent;
   DEFAULT_RULE_TEXT_Event: string;
   DICE_RULE_BLOCK_START_Event: string;
   DICE_RULE_BLOCK_END_Event: string;
-}
-
-function parseAllowedDiceSidesForRuleEvent(raw: string): number[] {
-  const text = String(raw || "").trim();
-  if (!text) return [];
-  const unique = new Set<number>();
-  for (const part of text.split(/[，,\s]+/)) {
-    const value = Number(String(part || "").trim());
-    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) continue;
-    unique.add(value);
-  }
-  return Array.from(unique).sort((a, b) => a - b);
-}
-
-export function buildDiceRuleBlockCompactEvent(deps: DiceRuleBlockDepsEvent): string {
-  const settings = deps.getSettingsEvent();
-  const rawRuleText =
-    typeof settings.ruleText === "string" && settings.ruleText.trim().length > 0
-      ? settings.ruleText
-      : deps.DEFAULT_RULE_TEXT_Event;
-  const ruleText = rawRuleText.replace(/\[\/?DICE_EVENT_RULES\]/g, "").trim();
-  let skillRuleSection = "";
-  if (settings.enableSkillSystem) {
-    const skillTable = deps.getSkillModifierTableMapEvent(settings);
-    const skillTableJson = JSON.stringify(skillTable);
-    const store = deps.getSkillPresetStoreEvent(settings);
-    const activePreset = deps.getActiveSkillPresetEvent(store);
-    const presetNameLine = String(activePreset.name ?? "").replace(/\s+/g, " ").trim() || "unnamed";
-    skillRuleSection = `\n[SKILL_SYSTEM]\nenabled=true\npreset_id=${activePreset.id}\npreset_name=${presetNameLine}\nskill_table=${skillTableJson}\n说明：event.skill 会匹配 skill_table 的 key（trim + lowercase），命中后作为技能修正加到检定总值。\n[/SKILL_SYSTEM]`;
-  }
-
-  const allowedDiceSides = parseAllowedDiceSidesForRuleEvent(settings.aiAllowedDiceSidesText);
-  const allowedDiceExamples =
-    allowedDiceSides.length > 0
-      ? allowedDiceSides.slice(0, 3).map((sides) => `1d${sides}`).join(" / ")
-      : "1d20 / 2d6+2";
-  const disallowedDiceHint =
-    allowedDiceSides.length > 0
-      ? `例如 1d100（若 100 不在 allowed_sides）属于禁止格式。`
-      : "";
-  const allowedDiceSidesHardConstraint =
-    allowedDiceSides.length > 0
-      ? `【硬性约束】本轮允许的 checkDice 面数仅为：${allowedDiceSides.join(",")}。\n仅可使用示例：${allowedDiceExamples}。\n${disallowedDiceHint}\n若你输出其他面数，系统会自动修正或拒绝该事件。\n`
-      : "";
-  const allowedDiceSidesRuleSection =
-    allowedDiceSides.length > 0
-      ? `\n[DICE_ALLOWED_SIDES]\nenabled=true\nallowed_sides=${allowedDiceSides.join(",")}\nallowed_examples=${allowedDiceExamples}\nforbidden_hint=${disallowedDiceHint || "none"}\n要求：生成事件时，checkDice 只能使用上述面数。\n若不在列表内，事件会被系统自动修正，必要时拒绝。\n[/DICE_ALLOWED_SIDES]`
-      : "";
-
-  return `${deps.DICE_RULE_BLOCK_START_Event}
-${allowedDiceSidesHardConstraint}${ruleText}${skillRuleSection}${allowedDiceSidesRuleSection}
-${deps.DICE_RULE_BLOCK_END_Event}`;
-}
-
-export function buildDiceRuleBlockEvent(deps: DiceRuleBlockDepsEvent): string {
-  return buildDiceRuleBlockCompactEvent(deps);
-}
-
-export function applyManagedSystemContentEvent(
-  chat: TavernMessageEvent[],
-  managedBlock: string
-): void {
-  const hasLegacyTextShape = chat.some((item) => {
-    if (!item || typeof item !== "object") return false;
-    return (
-      Object.prototype.hasOwnProperty.call(item, "mes") ||
-      Object.prototype.hasOwnProperty.call(item, "message") ||
-      Object.prototype.hasOwnProperty.call(item, "text")
-    );
-  });
-
-  const systemIndex = findFirstSystemIndexEvent(chat);
-  if (systemIndex >= 0) {
-    const systemMessage = chat[systemIndex];
-    const base = stripManagedBlocksEvent(
-      typeof systemMessage.content === "string" ? systemMessage.content : getMessageTextEvent(systemMessage)
-    );
-    const next = normalizeBlankLinesEvent([base, managedBlock].filter(Boolean).join("\n\n"));
-
-    systemMessage.content = next;
-    if (hasLegacyTextShape || Object.prototype.hasOwnProperty.call(systemMessage, "mes")) {
-      systemMessage.mes = next;
-    }
-    if (
-      hasLegacyTextShape ||
-      Object.prototype.hasOwnProperty.call(systemMessage as any, "message")
-    ) {
-      (systemMessage as any).message = next;
-    }
-    if (hasLegacyTextShape || Object.prototype.hasOwnProperty.call(systemMessage as any, "text")) {
-      (systemMessage as any).text = next;
-    }
-    systemMessage.is_system = true;
-    systemMessage.role = systemMessage.role || "system";
-    return;
-  }
-
-  if (!managedBlock.trim()) return;
-  const systemMessage: TavernMessageEvent = {
-    role: "system",
-    is_system: true,
-    content: managedBlock,
-  };
-  if (hasLegacyTextShape) {
-    systemMessage.mes = managedBlock;
-    (systemMessage as any).message = managedBlock;
-    (systemMessage as any).text = managedBlock;
-  }
-  chat.unshift(systemMessage);
-}
-
-export interface ComposePromptDepsEvent extends DiceRuleBlockDepsEvent {
+  DICE_RUNTIME_POLICY_BLOCK_START_Event?: string;
+  DICE_RUNTIME_POLICY_BLOCK_END_Event?: string;
+  DICE_SUMMARY_BLOCK_START_Event: string;
+  DICE_SUMMARY_BLOCK_END_Event: string;
+  DICE_RESULT_GUIDANCE_BLOCK_START_Event?: string;
+  DICE_RESULT_GUIDANCE_BLOCK_END_Event?: string;
+  DICE_ACTIVE_STATUSES_BLOCK_START_Event?: string;
+  DICE_ACTIVE_STATUSES_BLOCK_END_Event?: string;
   sweepTimeoutFailuresEvent: () => boolean;
   getDiceMetaEvent: () => DiceMetaEvent;
   ensureSummaryHistoryEvent: (meta: DiceMetaEvent) => RoundSummarySnapshotEvent[];
-  createRoundSummarySnapshotEvent: (
-    round: any,
-    now?: number
-  ) => RoundSummarySnapshotEvent;
+  createRoundSummarySnapshotEvent: (round: any, now?: number) => RoundSummarySnapshotEvent;
   trimSummaryHistoryEvent: (history: RoundSummarySnapshotEvent[]) => void;
   buildSummaryBlockFromHistoryEvent: (
     history: RoundSummarySnapshotEvent[],
-    detailMode: any,
+    detailMode: DicePluginSettingsEvent["summaryDetailMode"],
     lastNRounds: number,
     includeOutcomeInSummary: boolean
   ) => string;
   saveMetadataSafeEvent: () => void;
 }
 
-export function composePromptInjectionsEvent(
-  promptChat: TavernMessageEvent[],
-  deps: ComposePromptDepsEvent
-): string {
+export function handlePromptReadyEvent(
+  payload: any,
+  deps: HandlePromptReadyDepsEvent,
+  sourceEvent = "unknown"
+): void {
   const settings = deps.getSettingsEvent();
-  if (!settings.enabled) return "";
+  if (!settings.enabled) return;
+
   deps.sweepTimeoutFailuresEvent();
 
-  const meta = deps.getDiceMetaEvent();
-  const lastUser = findLastUserMessageEvent(promptChat);
-  const currentUserId = lastUser ? buildPromptMessageIdEvent(lastUser) : "";
-  const isNewUserPrompt =
-    Boolean(currentUserId) && currentUserId !== meta.lastPromptUserMsgId;
+  const chat = extractPromptChatFromPayloadEvent(payload);
+  if (!chat || chat.length === 0) return;
+  const userIndex = findLastUserIndexEvent(chat);
+  if (userIndex < 0) return;
+  const userMsg = chat[userIndex];
+  if (!userMsg) return;
+  const systemIndex = findLastSystemIndexEvent(chat);
+  const injectionMsg = systemIndex >= 0 ? chat[systemIndex] : userMsg;
+  if (!injectionMsg) return;
+  const injectionTarget = systemIndex >= 0 ? "system" : "user_fallback";
 
-  let summaryToInject = "";
-  let changed = false;
+  const ruleStartTag = deps.DICE_RULE_BLOCK_START_Event || DEFAULT_RULE_BLOCK_START_Event;
+  const ruleEndTag = deps.DICE_RULE_BLOCK_END_Event || DEFAULT_RULE_BLOCK_END_Event;
+  const runtimePolicyStartTag =
+    deps.DICE_RUNTIME_POLICY_BLOCK_START_Event || DEFAULT_RUNTIME_POLICY_BLOCK_START_Event;
+  const runtimePolicyEndTag =
+    deps.DICE_RUNTIME_POLICY_BLOCK_END_Event || DEFAULT_RUNTIME_POLICY_BLOCK_END_Event;
+  const summaryStartTag = deps.DICE_SUMMARY_BLOCK_START_Event || DEFAULT_SUMMARY_BLOCK_START_Event;
+  const summaryEndTag = deps.DICE_SUMMARY_BLOCK_END_Event || DEFAULT_SUMMARY_BLOCK_END_Event;
+  const guidanceStartTag =
+    deps.DICE_RESULT_GUIDANCE_BLOCK_START_Event || DEFAULT_RESULT_GUIDANCE_BLOCK_START_Event;
+  const guidanceEndTag =
+    deps.DICE_RESULT_GUIDANCE_BLOCK_END_Event || DEFAULT_RESULT_GUIDANCE_BLOCK_END_Event;
+  const statusesStartTag =
+    deps.DICE_ACTIVE_STATUSES_BLOCK_START_Event || DEFAULT_ACTIVE_STATUSES_BLOCK_START_Event;
+  const statusesEndTag =
+    deps.DICE_ACTIVE_STATUSES_BLOCK_END_Event || DEFAULT_ACTIVE_STATUSES_BLOCK_END_Event;
+  const managedTags = {
+    ruleStart: ruleStartTag,
+    ruleEnd: ruleEndTag,
+    runtimePolicyStart: runtimePolicyStartTag,
+    runtimePolicyEnd: runtimePolicyEndTag,
+    summaryStart: summaryStartTag,
+    summaryEnd: summaryEndTag,
+    guidanceStart: guidanceStartTag,
+    guidanceEnd: guidanceEndTag,
+    statusesStart: statusesStartTag,
+    statusesEnd: statusesEndTag,
+  };
 
-  if (isNewUserPrompt) {
-    const history = deps.ensureSummaryHistoryEvent(meta);
-    if (meta.pendingRound) {
-      const snapshot = deps.createRoundSummarySnapshotEvent(meta.pendingRound, Date.now());
-      history.push(snapshot);
-      deps.trimSummaryHistoryEvent(history);
-      delete meta.pendingRound;
-      changed = true;
+  const userStableText = stripManagedBlocksEvent(getMessageTextEvent(userMsg), managedTags);
+  const userMsgId = buildPromptMessageIdByTextEvent(userStableText, userMsg, userIndex);
+  if (injectionMsg !== userMsg) {
+    const userCurrentText = getMessageTextEvent(userMsg);
+    if (userCurrentText !== userStableText) {
+      setMessageTextEvent(userMsg, userStableText);
     }
+  }
 
-    summaryToInject = deps.buildSummaryBlockFromHistoryEvent(
+  const meta = deps.getDiceMetaEvent();
+  const isSameUserPrompt = meta.lastPromptUserMsgId === userMsgId;
+  let changedMeta = false;
+
+  if (!isSameUserPrompt) {
+    meta.lastPromptUserMsgId = userMsgId;
+    changedMeta = true;
+  }
+
+  if (!isSameUserPrompt && meta.pendingRound && Array.isArray(meta.pendingRound.events) && meta.pendingRound.events.length > 0) {
+    const history = deps.ensureSummaryHistoryEvent(meta);
+    const snapshot = deps.createRoundSummarySnapshotEvent(meta.pendingRound, Date.now());
+    if (upsertRoundSnapshotToHistoryEvent(history, snapshot)) {
+      deps.trimSummaryHistoryEvent(history);
+      changedMeta = true;
+    }
+  }
+
+  if (!isSameUserPrompt && !settings.enableAiRoundControl && meta.pendingRound?.status === "open") {
+    meta.pendingRound.status = "closed";
+    changedMeta = true;
+    console.info("[骰子插件] 已按“每轮模式”在用户发言后结束当前轮次");
+  }
+
+  const currentText = getMessageTextEvent(injectionMsg);
+  const strippedText = stripManagedBlocksEvent(currentText, managedTags);
+
+  let ruleBlockText = "";
+  let runtimePolicyBlockText = "";
+  if (settings.autoSendRuleToAI) {
+    const configuredRuleText = normalizeTextEvent(settings.ruleText || "").trim();
+    const fallbackRuleText = normalizeTextEvent(deps.DEFAULT_RULE_TEXT_Event || "").trim();
+    const finalRuleText = configuredRuleText || fallbackRuleText;
+    ruleBlockText = buildDiceRuleBlockEvent(finalRuleText, ruleStartTag, ruleEndTag);
+    runtimePolicyBlockText = buildDiceRuntimePolicyBlockEvent(
+      settings,
+      runtimePolicyStartTag,
+      runtimePolicyEndTag
+    );
+  }
+
+  let summaryBlockText = "";
+  if (isSameUserPrompt && meta.outboundSummary && meta.outboundSummary.userMsgId === userMsgId) {
+    summaryBlockText = normalizeBlockTextEvent(meta.outboundSummary.summaryText);
+  } else {
+    const history = deps.ensureSummaryHistoryEvent(meta);
+    const built = deps.buildSummaryBlockFromHistoryEvent(
       history,
       settings.summaryDetailMode,
       settings.summaryHistoryRounds,
       settings.includeOutcomeInSummary
     );
-
-    if (summaryToInject) {
-      const latestRoundId = history.length > 0 ? history[history.length - 1].roundId : "none";
+    summaryBlockText = normalizeBlockTextEvent(built);
+    if (summaryBlockText) {
       meta.outboundSummary = {
-        userMsgId: currentUserId,
-        roundId: latestRoundId,
-        summaryText: summaryToInject,
+        userMsgId,
+        roundId: meta.pendingRound?.roundId || "",
+        summaryText: summaryBlockText,
       };
-      const currentChars = summaryToInject.length;
-      console.info(
-        `[骰子插件] DICE_ROUND_SUMMARY chars=${currentChars} detail=${settings.summaryDetailMode} rounds=${settings.summaryHistoryRounds} includeOutcome=${settings.includeOutcomeInSummary} format=nl-v5`
-      );
-      changed = true;
     } else if (meta.outboundSummary) {
       delete meta.outboundSummary;
-      changed = true;
     }
-  } else if (currentUserId && meta.outboundSummary?.userMsgId === currentUserId) {
-    summaryToInject = meta.outboundSummary.summaryText;
+    changedMeta = true;
   }
 
-  if (currentUserId && currentUserId !== meta.lastPromptUserMsgId) {
-    meta.lastPromptUserMsgId = currentUserId;
-    changed = true;
+  const guidanceResolved = resolvePromptGuidanceInjectionEvent(
+    meta,
+    settings,
+    userMsgId,
+    isSameUserPrompt,
+    guidanceStartTag,
+    guidanceEndTag
+  );
+  const guidanceBlockText = normalizeBlockTextEvent(guidanceResolved.text);
+  if (guidanceResolved.changedMeta) {
+    changedMeta = true;
   }
 
-  if (changed) deps.saveMetadataSafeEvent();
+  const statusBlockText = settings.enableStatusSystem
+    ? buildActiveStatusesBlockEvent(ensureActiveStatusesFromMetaEvent(meta), statusesStartTag, statusesEndTag)
+    : "";
 
-  const blocks: string[] = [];
-  if (settings.autoSendRuleToAI) blocks.push(buildDiceRuleBlockEvent(deps));
-  if (summaryToInject) blocks.push(summaryToInject);
-  return blocks.join("\n\n").trim();
-}
-
-export function extractPromptChatFromPayloadEvent(payload: any): TavernMessageEvent[] | null {
-  if (!payload || typeof payload !== "object") return null;
-  const candidates = [payload, payload?.request, payload?.data, payload?.payload, payload?.params];
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    if (Array.isArray(candidate.messages)) return candidate.messages as TavernMessageEvent[];
-  }
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    if (Array.isArray(candidate.chat)) return candidate.chat as TavernMessageEvent[];
-  }
-  return null;
-}
-
-export function handlePromptReadyEvent(
-  payload: any,
-  deps: ComposePromptDepsEvent,
-  sourceEvent = "unknown"
-): void {
-  if (!payload || payload.dryRun) return;
-
-  const promptChat = extractPromptChatFromPayloadEvent(payload);
-  if (!promptChat || !Array.isArray(promptChat)) return;
-
-  const managed = composePromptInjectionsEvent(promptChat, deps);
-  if (!managed) {
-    const settings = deps.getSettingsEvent();
-    if (settings.enabled && settings.autoSendRuleToAI) {
-      console.info(`[骰子插件] ${sourceEvent} 命中 prompt 事件，但无需注入（managed 为空）`);
-    }
-    return;
+  const composedText = composePromptInjectionsEvent(strippedText, [
+    ruleBlockText,
+    runtimePolicyBlockText,
+    summaryBlockText,
+    guidanceBlockText,
+    statusBlockText,
+  ]);
+  if (composedText !== currentText) {
+    setMessageTextEvent(injectionMsg, composedText);
   }
 
-  applyManagedSystemContentEvent(promptChat, managed);
-  console.info(`[骰子插件] 已在 ${sourceEvent} 注入 system 规则`);
+  if (changedMeta) {
+    deps.saveMetadataSafeEvent();
+  }
+
+  console.info(`[骰子插件] Prompt managed blocks updated via ${sourceEvent} (target=${injectionTarget})`);
 }

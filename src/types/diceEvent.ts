@@ -6,6 +6,11 @@ export interface DiceResult {
   rolls: number[];
   rawTotal: number;
   total: number;
+  keepMode?: "kh" | "kl";
+  keepCount?: number;
+  keptRolls?: number[];
+  droppedRolls?: number[];
+  selectionMode?: "keep_highest" | "keep_lowest" | "none";
   exploding?: boolean;
   explosionTriggered?: boolean;
 }

@@ -13,7 +13,11 @@ import {
   getLiveContextEvent as getLiveContextCoreEvent,
 } from "../core/runtimeContextEvent";
 import { pushToChat as pushToChatCoreEvent } from "../core/chatEvent";
-import { evaluateSuccessEvent as evaluateSuccessCoreEvent, rollExpression as rollExpressionCoreEvent } from "../core/diceEngineEvent";
+import {
+  evaluateSuccessEvent as evaluateSuccessCoreEvent,
+  parseDiceExpression as parseDiceExpressionCoreEvent,
+  rollExpression as rollExpressionCoreEvent,
+} from "../core/diceEngineEvent";
 import {
   createIdEvent as createIdCoreEvent,
   escapeHtmlEvent as escapeHtmlCoreEvent,
@@ -109,6 +113,7 @@ const rollDepsEvent = {
   ensureRoundEventTimersSyncedEvent,
   getLatestRollRecordForEvent,
   rollExpression: rollExpressionCoreEvent,
+  parseDiceExpression: parseDiceExpressionCoreEvent,
   resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
   applySkillModifierToDiceResultEvent: applySkillModifierToDiceResultModuleEvent,
   normalizeCompareOperatorEvent,
@@ -134,6 +139,7 @@ function performEventRollByIdEvent(eventIdRaw: string, overrideExpr?: string, ex
 function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
   return autoRollEventsByAiModeModuleEvent(round, {
     ...rollDepsEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
   });
 }
 

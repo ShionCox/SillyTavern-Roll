@@ -1,4 +1,4 @@
-import manifestJson from "../../manifest.json";
+﻿import manifestJson from "../../manifest.json";
 import type { DicePluginSettingsEvent } from "../types/eventDomainEvent";
 
 export const MODULE_NAME_Event = "SillyTavern-Roll";
@@ -8,7 +8,21 @@ export const SETTINGS_BADGE_ID_Event = "st-roll-settings-Event-badge";
 export const SETTINGS_ENABLED_ID_Event = "st-roll-settings-Event-enabled";
 export const SETTINGS_RULE_ID_Event = "st-roll-settings-Event-auto-rule";
 export const SETTINGS_AI_ROLL_MODE_ID_Event = "st-roll-settings-Event-ai-roll-mode";
+export const SETTINGS_AI_ROUND_CONTROL_ID_Event = "st-roll-settings-Event-ai-round-control";
 export const SETTINGS_EXPLODING_ENABLED_ID_Event = "st-roll-settings-Event-exploding-enabled";
+export const SETTINGS_ADVANTAGE_ENABLED_ID_Event = "st-roll-settings-Event-advantage-enabled";
+export const SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event = "st-roll-settings-Event-dynamic-result-guidance";
+export const SETTINGS_DYNAMIC_DC_REASON_ID_Event = "st-roll-settings-Event-dynamic-dc-reason";
+export const SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event = "st-roll-settings-Event-status-system-enabled";
+export const SETTINGS_STATUS_EDITOR_OPEN_ID_Event = "st-roll-settings-Event-status-editor-open";
+export const SETTINGS_STATUS_MODAL_ID_Event = "st-roll-settings-Event-status-modal";
+export const SETTINGS_STATUS_MODAL_CLOSE_ID_Event = "st-roll-settings-Event-status-modal-close";
+export const SETTINGS_STATUS_ROWS_ID_Event = "st-roll-settings-Event-status-rows";
+export const SETTINGS_STATUS_ADD_ID_Event = "st-roll-settings-Event-status-add";
+export const SETTINGS_STATUS_SAVE_ID_Event = "st-roll-settings-Event-status-save";
+export const SETTINGS_STATUS_RESET_ID_Event = "st-roll-settings-Event-status-reset";
+export const SETTINGS_STATUS_ERRORS_ID_Event = "st-roll-settings-Event-status-errors";
+export const SETTINGS_STATUS_DIRTY_HINT_ID_Event = "st-roll-settings-Event-status-dirty-hint";
 export const SETTINGS_ALLOWED_DICE_SIDES_ID_Event = "st-roll-settings-Event-allowed-dice-sides";
 export const SETTINGS_SUMMARY_DETAIL_ID_Event = "st-roll-settings-Event-summary-detail";
 export const SETTINGS_SUMMARY_ROUNDS_ID_Event = "st-roll-settings-Event-summary-rounds";
@@ -99,7 +113,21 @@ export const SETTINGS_TEMPLATE_STATIC_DEPS_Event = {
   SETTINGS_ENABLED_ID_Event,
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
+  SETTINGS_AI_ROUND_CONTROL_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event,
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event,
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event,
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event,
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event,
+  SETTINGS_STATUS_MODAL_ID_Event,
+  SETTINGS_STATUS_MODAL_CLOSE_ID_Event,
+  SETTINGS_STATUS_ROWS_ID_Event,
+  SETTINGS_STATUS_ADD_ID_Event,
+  SETTINGS_STATUS_SAVE_ID_Event,
+  SETTINGS_STATUS_RESET_ID_Event,
+  SETTINGS_STATUS_ERRORS_ID_Event,
+  SETTINGS_STATUS_DIRTY_HINT_ID_Event,
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
@@ -151,13 +179,21 @@ export const SETTINGS_TABS_AND_MODAL_IDS_Event = {
   SETTINGS_SKILL_MODAL_ID_Event,
   SETTINGS_SKILL_EDITOR_OPEN_ID_Event,
   SETTINGS_SKILL_MODAL_CLOSE_ID_Event,
+  SETTINGS_STATUS_MODAL_ID_Event,
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event,
+  SETTINGS_STATUS_MODAL_CLOSE_ID_Event,
   SETTINGS_SEARCH_ID_Event,
 } as const;
 export const SETTINGS_BASIC_INPUT_IDS_Event = {
   SETTINGS_ENABLED_ID_Event,
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
+  SETTINGS_AI_ROUND_CONTROL_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event,
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event,
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event,
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event,
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
@@ -199,7 +235,12 @@ export const SETTINGS_SYNC_UI_IDS_Event = {
   SETTINGS_ENABLED_ID_Event,
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
+  SETTINGS_AI_ROUND_CONTROL_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event,
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event,
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event,
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event,
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
@@ -212,13 +253,23 @@ export const SETTINGS_SYNC_UI_IDS_Event = {
   SETTINGS_TIME_LIMIT_MIN_ID_Event,
   SETTINGS_TIME_LIMIT_ROW_ID_Event,
   SETTINGS_SKILL_ENABLED_ID_Event,
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event,
+  SETTINGS_STATUS_ROWS_ID_Event,
+  SETTINGS_STATUS_ERRORS_ID_Event,
+  SETTINGS_STATUS_DIRTY_HINT_ID_Event,
   SETTINGS_RULE_TEXT_ID_Event,
   SETTINGS_SKILL_ROWS_ID_Event,
 } as const;
-export const DICE_RULE_BLOCK_START_Event = "[DICE_EVENT_RULES]";
-export const DICE_RULE_BLOCK_END_Event = "[/DICE_EVENT_RULES]";
-export const DICE_SUMMARY_BLOCK_START_Event = "[DICE_ROUND_SUMMARY]";
-export const DICE_SUMMARY_BLOCK_END_Event = "[/DICE_ROUND_SUMMARY]";
+export const DICE_RULE_BLOCK_START_Event = "<dice_rules>";
+export const DICE_RULE_BLOCK_END_Event = "</dice_rules>";
+export const DICE_SUMMARY_BLOCK_START_Event = "<dice_round_summary>";
+export const DICE_SUMMARY_BLOCK_END_Event = "</dice_round_summary>";
+export const DICE_RESULT_GUIDANCE_BLOCK_START_Event = "<dice_result_guidance>";
+export const DICE_RESULT_GUIDANCE_BLOCK_END_Event = "</dice_result_guidance>";
+export const DICE_RUNTIME_POLICY_BLOCK_START_Event = "<dice_runtime_policy>";
+export const DICE_RUNTIME_POLICY_BLOCK_END_Event = "</dice_runtime_policy>";
+export const DICE_ACTIVE_STATUSES_BLOCK_START_Event = "<dice_active_statuses>";
+export const DICE_ACTIVE_STATUSES_BLOCK_END_Event = "</dice_active_statuses>";
 export const SUMMARY_MAX_EVENTS_Event = 20;
 export const SUMMARY_MAX_TOTAL_EVENT_LINES_Event = 60;
 export const SUMMARY_HISTORY_ROUNDS_MIN_Event = 1;
@@ -231,56 +282,76 @@ export const SKILL_PRESET_DEFAULT_NAME_Event = "通用叙事TRPG（默认）";
 export const SKILL_PRESET_MIGRATION_NAME_Event = "迁移技能预设";
 export const SKILL_PRESET_NEW_NAME_BASE_Event = "新预设";
 export const DEFAULT_SKILL_PRESET_TABLE_Event: Record<string, number> = {
-  察觉: 10,
-  说服: 8,
-  潜行: 6,
-  调查: 9,
-  交涉: 7,
-  意志: 8,
-  反应: 6,
-  体能: 7,
-  医疗: 5,
-  知识: 8,
+  "察觉": 10,
+  "说服": 8,
+  "潜行": 6,
+  "调查": 9,
+  "交涉": 7,
+  "意志": 8,
+  "反应": 6,
+  "体能": 7,
+  "医疗": 5,
+  "知识": 8,
 };
 export const DEFAULT_SKILL_PRESET_TABLE_TEXT_Event = JSON.stringify(DEFAULT_SKILL_PRESET_TABLE_Event, null, 2);
 export const ISO_8601_DURATION_REGEX_Event =
   /^P(?=\d|T\d)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?$/i;
-export const DEFAULT_RULE_TEXT_Event = `你必须严格遵循以下骰子事件协议：
-1. 需要触发掷骰事件时，只在回复末尾输出一个 \`\`\`rolljson 代码块（禁止 \`\`\`json）。
-2. 顶层固定结构：
-{"type":"dice_events","version":"1","events":[...]}
-3. events[i] 必填字段：
-- id: string
-- title: string
-- checkDice: string（如 "1d20"、"2d6+3"、"1d12!"）
-- dc: number
-- skill: string（用于匹配技能系统中的技能表 key）
-- desc: string
-4. events[i] 可选字段：
-- compare: string，仅允许 >= > <= <（默认 >=）
-- scope: string，仅允许 protagonist / character / all
-- rollMode: string，仅允许 auto / manual（默认 manual）
-- timeLimit: string，ISO 8601 duration（例如 PT30S、PT5M）
-- target: object，{ type, name? }；type 仅允许 self / scene / supporting / object / other
-- outcomes: object，可包含 success / failure / explode 走向文本
-5. outcomes 说明：
-- outcomes.success: 判定成功走向
-- outcomes.failure: 判定失败走向（超时失败也归入 failure）
-- outcomes.explode: 爆骰走向（优先于 success/failure）
-6. 兼容字段 successOutcome / failureOutcome / explodeOutcome 也可识别，但推荐 outcomes 对象。
-7. 字段类型必须正确，尤其 checkDice 必须是字符串。
-8. 当存在 [DICE_ALLOWED_SIDES] 规则时，checkDice 的面数必须取自 allowed_sides，禁止使用列表外面数。
-9. 正确示例：
-\`\`\`rolljson
-{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d20+2","dc":15,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","target":{"type":"supporting","name":"穗秋生"},"outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
-\`\`\`
-10. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
-11. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为，请据此保持剧情一致。`;
+export const DEFAULT_RULE_TEXT_Event = `【事件骰子协议】
+1. 触发判定时，仅在回复末尾输出 \`\`\`rolljson 代码块（严禁 \`\`\`json）。
+2. 叙事勿含判定结果；须严格结合以下上下文保证剧情一致：
+   - <dice_runtime_policy>：遵循全局规则（面数、技能表、时间下限及 round_mode / ai_round_control_enabled 等）。
+   - <dice_round_summary>：承接历史轮次结果，保持剧情连贯。
+   - <dice_result_guidance>：执行叙事指令（如大成功表现、额外收益）。
+   - <dice_active_statuses>：体现当前状态修饰对剧情的实质影响。
+3. rolljson 结构严格如下：
+{
+  "type": "dice_events",
+  "version": "1",
+  "events": [{
+    // --- 必填 ---
+    "id": "str",
+    "title": "str",
+    "checkDice": "str", // NdM[!][khX|klX][+/-B]。面数限policy允许值。kh/kl覆盖advantage且禁与!同用。
+    "dc": num,
+    "skill": "str", // 限policy技能表
+    "desc": "str",
+    // --- 可选 ---
+    "compare": "str", // >=, >, <=, < (默认>=)
+    "scope": "str", // protagonist, character, all
+    "rollMode": "str", // auto(系统自动/分支), manual(默认)
+    "advantageState": "str", // normal, advantage, disadvantage
+    "dc_reason": "str", // 难度来源
+    "timeLimit": "str", // ISO 8601 (例:PT30S，须符policy最低限制)
+    "target": { "type": "self|scene|supporting|object|other", "name": "str(可选)" },
+    "outcomes": { 
+      "success": "str", // 成功走向
+      "failure": "str", // 失败/超时走向
+      "explode": "str"  // 爆骰走向(优先)
+      // 【状态标签】仅限写在outcomes文本内：
+      // [APPLY_STATUS:名,值,skills=A|B] 或 scope=all (缺第3参数默认当前skill)
+      // [REMOVE_STATUS:名] 或 [CLEAR_STATUS]
+      // 值必须为整数（可正可负）；skills 必须用 | 分隔
+      // 同名状态按名称覆盖（后者覆盖前者，不做叠加）
+    }
+  }],
+  // --- 顶层可选 (仅当 policy 中 round_mode=continuous 且 ai_round_control_enabled=1 时可用) ---
+  "round_control": "str", // continue / end_round
+  "end_round": bool       // 兼容写法 (true 等价于 round_control=end_round)
+}
+4. 状态标签附加规则：
+   - 仅当 <dice_runtime_policy> 中 status_system_enabled=1 时，才允许输出状态标签；否则必须不输出任何状态标签。
+   - 采用 skills 范围时，skills 不可为空，且应使用当前技能表中的标准技能名。
+   - 状态标签仅允许出现在 outcomes.success / outcomes.failure / outcomes.explode 文本中，禁止出现在普通叙事正文。`;
 export const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   enabled: true,
   autoSendRuleToAI: true,
   enableAiRollMode: true,
+  enableAiRoundControl: false,
   enableExplodingDice: true,
+  enableAdvantageSystem: true,
+  enableDynamicResultGuidance: false,
+  enableDynamicDcReason: true,
+  enableStatusSystem: true,
   aiAllowedDiceSidesText: "4,6,8,10,12,20,100",
   summaryDetailMode: "minimal",
   summaryHistoryRounds: 3,
@@ -296,3 +367,4 @@ export const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   skillPresetStoreText: "",
   ruleText: DEFAULT_RULE_TEXT_Event,
 };
+

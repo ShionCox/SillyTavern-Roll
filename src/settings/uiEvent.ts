@@ -1,10 +1,26 @@
 import type {
+  ActiveStatusEvent,
   DicePluginSettingsEvent,
+  StatusEditorRowDraftEvent,
+  StatusScopeEvent,
   SkillEditorRowDraftEvent,
   SkillPresetEvent,
   SkillPresetStoreEvent,
 } from "../types/eventDomainEvent";
 import type { SettingsCardTemplateIdsEvent } from "../templates/settingsCardTemplateTypes";
+
+function escapeHtml(input: string): string {
+  return String(input ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttr(input: string): string {
+  return escapeHtml(input).replace(/`/g, "&#96;");
+}
 
 export interface SyncSettingsBadgeVersionDepsEvent {
   SETTINGS_BADGE_ID_Event: string;
@@ -55,7 +71,21 @@ export interface BuildSettingsCardTemplateIdsDepsEvent {
   SETTINGS_ENABLED_ID_Event: string;
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
+  SETTINGS_AI_ROUND_CONTROL_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event: string;
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event: string;
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event: string;
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event: string;
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event: string;
+  SETTINGS_STATUS_MODAL_ID_Event: string;
+  SETTINGS_STATUS_MODAL_CLOSE_ID_Event: string;
+  SETTINGS_STATUS_ROWS_ID_Event: string;
+  SETTINGS_STATUS_ADD_ID_Event: string;
+  SETTINGS_STATUS_SAVE_ID_Event: string;
+  SETTINGS_STATUS_RESET_ID_Event: string;
+  SETTINGS_STATUS_ERRORS_ID_Event: string;
+  SETTINGS_STATUS_DIRTY_HINT_ID_Event: string;
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
@@ -122,7 +152,21 @@ export function buildSettingsCardTemplateIdsEvent(
     enabledId: deps.SETTINGS_ENABLED_ID_Event,
     ruleId: deps.SETTINGS_RULE_ID_Event,
     aiRollModeId: deps.SETTINGS_AI_ROLL_MODE_ID_Event,
+    aiRoundControlId: deps.SETTINGS_AI_ROUND_CONTROL_ID_Event,
     explodingEnabledId: deps.SETTINGS_EXPLODING_ENABLED_ID_Event,
+    advantageEnabledId: deps.SETTINGS_ADVANTAGE_ENABLED_ID_Event,
+    dynamicResultGuidanceId: deps.SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event,
+    dynamicDcReasonId: deps.SETTINGS_DYNAMIC_DC_REASON_ID_Event,
+    statusSystemEnabledId: deps.SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event,
+    statusEditorOpenId: deps.SETTINGS_STATUS_EDITOR_OPEN_ID_Event,
+    statusModalId: deps.SETTINGS_STATUS_MODAL_ID_Event,
+    statusModalCloseId: deps.SETTINGS_STATUS_MODAL_CLOSE_ID_Event,
+    statusRowsId: deps.SETTINGS_STATUS_ROWS_ID_Event,
+    statusAddId: deps.SETTINGS_STATUS_ADD_ID_Event,
+    statusSaveId: deps.SETTINGS_STATUS_SAVE_ID_Event,
+    statusResetId: deps.SETTINGS_STATUS_RESET_ID_Event,
+    statusErrorsId: deps.SETTINGS_STATUS_ERRORS_ID_Event,
+    statusDirtyHintId: deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event,
     allowedDiceSidesId: deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
     summaryDetailId: deps.SETTINGS_SUMMARY_DETAIL_ID_Event,
     summaryRoundsId: deps.SETTINGS_SUMMARY_ROUNDS_ID_Event,
@@ -167,6 +211,7 @@ export function buildSettingsCardTemplateIdsEvent(
 export interface MountSettingsCardShellDepsEvent {
   SETTINGS_CARD_ID_Event: string;
   SETTINGS_SKILL_MODAL_ID_Event: string;
+  SETTINGS_STATUS_MODAL_ID_Event: string;
   buildSettingsCardHtmlTemplateEvent: (ids: SettingsCardTemplateIdsEvent) => string;
   buildSettingsCardTemplateIdsEvent: (
     drawerToggleId: string,
@@ -223,6 +268,10 @@ export function mountSettingsCardShellEvent(
   if (modalInPanel) {
     root.appendChild(modalInPanel);
   }
+  const statusModal = root.querySelector(`#${deps.SETTINGS_STATUS_MODAL_ID_Event}`) as HTMLElement | null;
+  if (statusModal) {
+    root.appendChild(statusModal);
+  }
 
   container.prepend(root);
   deps.syncSettingsBadgeVersionEvent();
@@ -247,6 +296,9 @@ export interface BindSettingsTabsAndModalDepsEvent {
   SETTINGS_SKILL_MODAL_ID_Event: string;
   SETTINGS_SKILL_EDITOR_OPEN_ID_Event: string;
   SETTINGS_SKILL_MODAL_CLOSE_ID_Event: string;
+  SETTINGS_STATUS_MODAL_ID_Event: string;
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event: string;
+  SETTINGS_STATUS_MODAL_CLOSE_ID_Event: string;
   SETTINGS_SEARCH_ID_Event: string;
   confirmDiscardSkillDraftEvent: () => boolean;
   isElementVisibleEvent: (element: HTMLElement | null) => boolean;
@@ -268,6 +320,13 @@ export function bindSettingsTabsAndModalEvent(deps: BindSettingsTabsAndModalDeps
   ) as HTMLButtonElement | null;
   const skillModalCloseBtn = document.getElementById(
     deps.SETTINGS_SKILL_MODAL_CLOSE_ID_Event
+  ) as HTMLButtonElement | null;
+  const statusModal = document.getElementById(deps.SETTINGS_STATUS_MODAL_ID_Event) as HTMLDialogElement | null;
+  const statusEditorOpenBtn = document.getElementById(
+    deps.SETTINGS_STATUS_EDITOR_OPEN_ID_Event
+  ) as HTMLButtonElement | null;
+  const statusModalCloseBtn = document.getElementById(
+    deps.SETTINGS_STATUS_MODAL_CLOSE_ID_Event
   ) as HTMLButtonElement | null;
   const searchInput = document.getElementById(deps.SETTINGS_SEARCH_ID_Event) as HTMLInputElement | null;
 
@@ -323,6 +382,38 @@ export function bindSettingsTabsAndModalEvent(deps: BindSettingsTabsAndModalDeps
     }
   };
 
+  const closeStatusEditorModalEvent = () => {
+    if (!statusModal) return;
+    if (statusModal.open) {
+      try {
+        statusModal.close();
+      } catch {
+        // noop
+      }
+    }
+    if (document.body.dataset.stRollStatusModalOpen === "1") {
+      document.body.style.overflow = document.body.dataset.stRollStatusModalOverflow || "";
+      delete document.body.dataset.stRollStatusModalOpen;
+      delete document.body.dataset.stRollStatusModalOverflow;
+    }
+  };
+
+  const openStatusEditorModalEvent = () => {
+    if (!statusModal) return;
+    if (!statusModal.open) {
+      try {
+        statusModal.showModal();
+      } catch {
+        statusModal.setAttribute("open", "");
+      }
+    }
+    if (document.body.dataset.stRollStatusModalOpen !== "1") {
+      document.body.dataset.stRollStatusModalOpen = "1";
+      document.body.dataset.stRollStatusModalOverflow = document.body.style.overflow || "";
+      document.body.style.overflow = "hidden";
+    }
+  };
+
   const activateTab = (tab: "main" | "skill" | "rule" | "about") => {
     activeTab = tab;
     const isMain = tab === "main";
@@ -347,6 +438,7 @@ export function bindSettingsTabsAndModalEvent(deps: BindSettingsTabsAndModalDeps
     if (nextTab !== "skill") {
       closeSkillEditorModalEvent();
     }
+    closeStatusEditorModalEvent();
     activateTab(nextTab);
     return true;
   };
@@ -435,10 +527,32 @@ export function bindSettingsTabsAndModalEvent(deps: BindSettingsTabsAndModalDeps
     closeSkillEditorModalEvent();
   });
 
+  statusEditorOpenBtn?.addEventListener("click", () => {
+    if (!tryActivateTab("main")) return;
+    openStatusEditorModalEvent();
+  });
+
+  statusModalCloseBtn?.addEventListener("click", () => {
+    closeStatusEditorModalEvent();
+  });
+
+  statusModal?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.target === statusModal || target?.dataset.statusModalRole === "backdrop") {
+      closeStatusEditorModalEvent();
+    }
+  });
+
+  statusModal?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeStatusEditorModalEvent();
+  });
+
   if (!SKILL_EDITOR_MODAL_KEYDOWN_BOUND_Event) {
     window.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       closeSkillEditorModalEvent();
+      closeStatusEditorModalEvent();
     });
     SKILL_EDITOR_MODAL_KEYDOWN_BOUND_Event = true;
   }
@@ -451,6 +565,7 @@ export function bindSettingsTabsAndModalEvent(deps: BindSettingsTabsAndModalDeps
       if (!deps.isElementVisibleEvent(drawerContent)) return;
       if (deps.confirmDiscardSkillDraftEvent()) {
         closeSkillEditorModalEvent();
+        closeStatusEditorModalEvent();
         return;
       }
       event.preventDefault();
@@ -479,7 +594,12 @@ export interface BindBasicSettingsInputsDepsEvent {
   SETTINGS_ENABLED_ID_Event: string;
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
+  SETTINGS_AI_ROUND_CONTROL_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event: string;
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event: string;
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event: string;
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event: string;
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
@@ -498,7 +618,12 @@ export interface BindBasicSettingsInputsDepsEvent {
     enabled?: boolean;
     autoSendRuleToAI?: boolean;
     enableAiRollMode?: boolean;
+    enableAiRoundControl?: boolean;
     enableExplodingDice?: boolean;
+    enableAdvantageSystem?: boolean;
+    enableDynamicResultGuidance?: boolean;
+    enableDynamicDcReason?: boolean;
+    enableStatusSystem?: boolean;
     aiAllowedDiceSidesText?: string;
     summaryDetailMode?: "minimal" | "balanced" | "detailed";
     summaryHistoryRounds?: number;
@@ -519,8 +644,23 @@ export function bindBasicSettingsInputsEvent(deps: BindBasicSettingsInputsDepsEv
   const aiRollModeInput = document.getElementById(
     deps.SETTINGS_AI_ROLL_MODE_ID_Event
   ) as HTMLInputElement | null;
+  const aiRoundControlInput = document.getElementById(
+    deps.SETTINGS_AI_ROUND_CONTROL_ID_Event
+  ) as HTMLInputElement | null;
   const explodingEnabledInput = document.getElementById(
     deps.SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const advantageEnabledInput = document.getElementById(
+    deps.SETTINGS_ADVANTAGE_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const dynamicResultGuidanceInput = document.getElementById(
+    deps.SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event
+  ) as HTMLInputElement | null;
+  const dynamicDcReasonInput = document.getElementById(
+    deps.SETTINGS_DYNAMIC_DC_REASON_ID_Event
+  ) as HTMLInputElement | null;
+  const statusSystemEnabledInput = document.getElementById(
+    deps.SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event
   ) as HTMLInputElement | null;
   const allowedDiceSidesInput = document.getElementById(
     deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event
@@ -569,9 +709,34 @@ export function bindBasicSettingsInputsEvent(deps: BindBasicSettingsInputsDepsEv
     deps.updateSettingsEvent({ enableAiRollMode: value });
   });
 
+  aiRoundControlInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    deps.updateSettingsEvent({ enableAiRoundControl: value });
+  });
+
   explodingEnabledInput?.addEventListener("input", (event) => {
     const value = Boolean((event.target as HTMLInputElement).checked);
     deps.updateSettingsEvent({ enableExplodingDice: value });
+  });
+
+  advantageEnabledInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    deps.updateSettingsEvent({ enableAdvantageSystem: value });
+  });
+
+  dynamicResultGuidanceInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    deps.updateSettingsEvent({ enableDynamicResultGuidance: value });
+  });
+
+  dynamicDcReasonInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    deps.updateSettingsEvent({ enableDynamicDcReason: value });
+  });
+
+  statusSystemEnabledInput?.addEventListener("input", (event) => {
+    const value = Boolean((event.target as HTMLInputElement).checked);
+    deps.updateSettingsEvent({ enableStatusSystem: value });
   });
 
   allowedDiceSidesInput?.addEventListener("change", (event) => {
@@ -811,6 +976,352 @@ export function bindRuleTextActionsEvent(deps: BindRuleTextActionsDepsEvent): vo
   });
 }
 
+let STATUS_EDITOR_ROWS_DRAFT_Event: StatusEditorRowDraftEvent[] = [];
+let STATUS_EDITOR_LAST_SNAPSHOT_Event = "";
+let STATUS_EDITOR_DIRTY_Event = false;
+let STATUS_EDITOR_LAST_META_SNAPSHOT_Event = "";
+
+function normalizeStatusNameKeyLocalEvent(raw: any): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+function normalizeStatusSkillKeyLocalEvent(raw: any): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+function parseStatusSkillsTextToKeysEvent(raw: string): string[] {
+  const source = String(raw ?? "").trim();
+  if (!source) return [];
+  const parts = source
+    .split("|")
+    .map((item) => normalizeStatusSkillKeyLocalEvent(item))
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+function createStatusEditorRowDraftEvent(
+  name = "",
+  modifierText = "",
+  scope: StatusScopeEvent = "skills",
+  skillsText = "",
+  enabled = true
+): StatusEditorRowDraftEvent {
+  return {
+    rowId: `status_row_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    modifierText,
+    scope,
+    skillsText,
+    enabled,
+  };
+}
+
+function buildStatusDraftSnapshotEvent(rows: StatusEditorRowDraftEvent[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      name: String(row.name ?? ""),
+      modifierText: String(row.modifierText ?? ""),
+      scope: row.scope === "all" ? "all" : "skills",
+      skillsText: String(row.skillsText ?? ""),
+      enabled: row.enabled !== false,
+    }))
+  );
+}
+
+function renderStatusValidationErrorsEvent(errorWrapId: string, errors: string[]): void {
+  const wrap = document.getElementById(errorWrapId) as HTMLElement | null;
+  if (!wrap) return;
+  if (!errors.length) {
+    wrap.hidden = true;
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.hidden = false;
+  wrap.innerHTML = errors
+    .map((item) => `<div class="st-roll-status-error-item">${escapeHtml(item)}</div>`)
+    .join("");
+}
+
+function setStatusDraftDirtyEvent(flag: boolean, dirtyHintId: string): void {
+  STATUS_EDITOR_DIRTY_Event = Boolean(flag);
+  const dirtyHint = document.getElementById(dirtyHintId) as HTMLElement | null;
+  if (dirtyHint) {
+    dirtyHint.hidden = !STATUS_EDITOR_DIRTY_Event;
+  }
+}
+
+function renderStatusRowsEvent(rowsWrapId: string): void {
+  const rowsWrap = document.getElementById(rowsWrapId) as HTMLElement | null;
+  if (!rowsWrap) return;
+  if (!STATUS_EDITOR_ROWS_DRAFT_Event.length) {
+    rowsWrap.innerHTML = `<div class="st-roll-status-empty">暂无状态，点击“新增状态”开始配置。</div>`;
+    return;
+  }
+  rowsWrap.innerHTML = STATUS_EDITOR_ROWS_DRAFT_Event
+    .map((row) => {
+      const rowId = escapeAttr(String(row.rowId ?? ""));
+      const name = escapeAttr(String(row.name ?? ""));
+      const modifierText = escapeAttr(String(row.modifierText ?? ""));
+      const scope = row.scope === "all" ? "all" : "skills";
+      const skillsText = escapeAttr(String(row.skillsText ?? ""));
+      const enabled = row.enabled !== false;
+      const skillsDisabledAttr = scope === "all" ? "disabled" : "";
+      const skillsPlaceholder = scope === "all" ? "范围为全局时会忽略此项" : "例如: 敏捷|潜行";
+      return `
+        <div class="st-roll-status-row" data-row-id="${rowId}">
+          <input class="st-roll-input st-roll-status-name" type="text" data-status-row-id="${rowId}" data-status-field="name" value="${name}" placeholder="状态名称" />
+          <input class="st-roll-input st-roll-status-modifier" type="text" inputmode="numeric" data-status-row-id="${rowId}" data-status-field="modifier" value="${modifierText}" placeholder="例如 -2" />
+          <select class="st-roll-select st-roll-status-scope" data-status-row-id="${rowId}" data-status-field="scope">
+            <option value="skills" ${scope === "skills" ? "selected" : ""}>按技能</option>
+            <option value="all" ${scope === "all" ? "selected" : ""}>全局</option>
+          </select>
+          <input class="st-roll-input st-roll-status-skills" type="text" data-status-row-id="${rowId}" data-status-field="skills" value="${skillsText}" placeholder="${skillsPlaceholder}" ${skillsDisabledAttr} />
+          <label class="st-roll-status-enabled-wrap">
+            <input type="checkbox" data-status-row-id="${rowId}" data-status-field="enabled" ${enabled ? "checked" : ""} />
+            <span>启用</span>
+          </label>
+          <button type="button" class="st-roll-btn secondary st-roll-status-remove" data-status-remove-id="${rowId}">删除</button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function deserializeActiveStatusesToDraftRowsEvent(statuses: ActiveStatusEvent[]): StatusEditorRowDraftEvent[] {
+  return (Array.isArray(statuses) ? statuses : []).map((status) =>
+    createStatusEditorRowDraftEvent(
+      String(status.name ?? ""),
+      String(status.modifier ?? 0),
+      status.scope === "all" ? "all" : "skills",
+      status.scope === "all" ? "" : (Array.isArray(status.skills) ? status.skills : []).join("|"),
+      status.enabled !== false
+    )
+  );
+}
+
+function validateStatusRowsEvent(
+  rows: StatusEditorRowDraftEvent[],
+  existingStatuses: ActiveStatusEvent[]
+): { errors: string[]; statuses: ActiveStatusEvent[] } {
+  const errors: string[] = [];
+  const statuses: ActiveStatusEvent[] = [];
+  const seen = new Map<string, number>();
+  const existingMap = new Map<string, ActiveStatusEvent>();
+  for (const item of existingStatuses || []) {
+    const key = normalizeStatusNameKeyLocalEvent(item.name);
+    if (key) existingMap.set(key, item);
+  }
+  const integerPattern = /^[+-]?\d+$/;
+  const now = Date.now();
+
+  rows.forEach((row, index) => {
+    const rowNo = index + 1;
+    const name = String(row.name ?? "").trim();
+    const nameKey = normalizeStatusNameKeyLocalEvent(name);
+    const modifierText = String(row.modifierText ?? "").trim();
+    const scope: StatusScopeEvent = row.scope === "all" ? "all" : "skills";
+    const skills = scope === "all" ? [] : parseStatusSkillsTextToKeysEvent(String(row.skillsText ?? ""));
+    let hasError = false;
+
+    if (!name) {
+      errors.push(`第 ${rowNo} 行：名称不能为空`);
+      hasError = true;
+    }
+    if (nameKey) {
+      const firstRow = seen.get(nameKey);
+      if (firstRow != null) {
+        errors.push(`第 ${rowNo} 行：名称与第 ${firstRow + 1} 行重复`);
+        hasError = true;
+      } else {
+        seen.set(nameKey, index);
+      }
+    }
+    if (!modifierText) {
+      errors.push(`第 ${rowNo} 行：修正值不能为空`);
+      hasError = true;
+    } else if (!integerPattern.test(modifierText)) {
+      errors.push(`第 ${rowNo} 行：修正值必须为整数`);
+      hasError = true;
+    }
+    if (scope === "skills" && skills.length <= 0) {
+      errors.push(`第 ${rowNo} 行：范围为“按技能”时，技能列表不能为空`);
+      hasError = true;
+    }
+    if (hasError) return;
+
+    const modifier = Number(modifierText);
+    const prev = existingMap.get(nameKey);
+    statuses.push({
+      name,
+      modifier,
+      scope,
+      skills,
+      enabled: row.enabled !== false,
+      createdAt: prev?.createdAt ?? now,
+      updatedAt: now,
+      source: "manual_editor",
+    });
+  });
+
+  return { errors, statuses };
+}
+
+function hydrateStatusDraftFromMetaEvent(
+  statuses: ActiveStatusEvent[],
+  rowsWrapId: string,
+  dirtyHintId: string,
+  force = false
+): void {
+  const rowsWrap = document.getElementById(rowsWrapId) as HTMLElement | null;
+  const metaSnapshot = JSON.stringify(
+    (Array.isArray(statuses) ? statuses : []).map((item) => ({
+      name: item.name,
+      modifier: item.modifier,
+      scope: item.scope,
+      skills: item.scope === "all" ? [] : item.skills,
+      enabled: item.enabled !== false,
+    }))
+  );
+  if (!force && STATUS_EDITOR_DIRTY_Event && rowsWrap?.hasChildNodes()) return;
+  if (!force && metaSnapshot === STATUS_EDITOR_LAST_META_SNAPSHOT_Event && rowsWrap?.hasChildNodes()) return;
+
+  STATUS_EDITOR_ROWS_DRAFT_Event = deserializeActiveStatusesToDraftRowsEvent(statuses);
+  STATUS_EDITOR_LAST_SNAPSHOT_Event = buildStatusDraftSnapshotEvent(STATUS_EDITOR_ROWS_DRAFT_Event);
+  STATUS_EDITOR_LAST_META_SNAPSHOT_Event = metaSnapshot;
+  setStatusDraftDirtyEvent(false, dirtyHintId);
+  renderStatusRowsEvent(rowsWrapId);
+}
+
+export interface BindStatusEditorActionsDepsEvent {
+  SETTINGS_STATUS_ROWS_ID_Event: string;
+  SETTINGS_STATUS_ADD_ID_Event: string;
+  SETTINGS_STATUS_SAVE_ID_Event: string;
+  SETTINGS_STATUS_RESET_ID_Event: string;
+  SETTINGS_STATUS_ERRORS_ID_Event: string;
+  SETTINGS_STATUS_DIRTY_HINT_ID_Event: string;
+  getActiveStatusesEvent: () => ActiveStatusEvent[];
+  setActiveStatusesEvent: (statuses: ActiveStatusEvent[]) => void;
+  syncSettingsUiEvent?: () => void;
+  pushToChat?: (message: string) => void;
+}
+
+export function bindStatusEditorActionsEvent(deps: BindStatusEditorActionsDepsEvent): void {
+  const rowsWrap = document.getElementById(deps.SETTINGS_STATUS_ROWS_ID_Event) as HTMLElement | null;
+  const addBtn = document.getElementById(deps.SETTINGS_STATUS_ADD_ID_Event) as HTMLButtonElement | null;
+  const saveBtn = document.getElementById(deps.SETTINGS_STATUS_SAVE_ID_Event) as HTMLButtonElement | null;
+  const resetBtn = document.getElementById(deps.SETTINGS_STATUS_RESET_ID_Event) as HTMLButtonElement | null;
+
+  const markDirty = () => {
+    const next = buildStatusDraftSnapshotEvent(STATUS_EDITOR_ROWS_DRAFT_Event);
+    setStatusDraftDirtyEvent(next !== STATUS_EDITOR_LAST_SNAPSHOT_Event, deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event);
+  };
+
+  hydrateStatusDraftFromMetaEvent(
+    deps.getActiveStatusesEvent(),
+    deps.SETTINGS_STATUS_ROWS_ID_Event,
+    deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event,
+    true
+  );
+  renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+
+  rowsWrap?.addEventListener("input", (event) => {
+    const target = event.target as HTMLInputElement | HTMLSelectElement | null;
+    if (!target) return;
+    const rowId = String((target as any).dataset.statusRowId ?? "");
+    const field = String((target as any).dataset.statusField ?? "");
+    if (!rowId || !field) return;
+    const row = STATUS_EDITOR_ROWS_DRAFT_Event.find((item) => item.rowId === rowId);
+    if (!row) return;
+
+    if (field === "name") row.name = target.value;
+    if (field === "modifier") row.modifierText = target.value;
+    if (field === "skills") row.skillsText = target.value;
+    if (field === "scope") {
+      row.scope = target.value === "all" ? "all" : "skills";
+      if (row.scope === "all") {
+        row.skillsText = "";
+      }
+      renderStatusRowsEvent(deps.SETTINGS_STATUS_ROWS_ID_Event);
+    }
+    if (field === "enabled") {
+      row.enabled = (target as HTMLInputElement).checked;
+    }
+    markDirty();
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+  });
+
+  rowsWrap?.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (!target) return;
+    const rowId = String(target.dataset.statusRowId ?? "");
+    const field = String(target.dataset.statusField ?? "");
+    if (!rowId || field !== "enabled") return;
+    const row = STATUS_EDITOR_ROWS_DRAFT_Event.find((item) => item.rowId === rowId);
+    if (!row) return;
+    row.enabled = target.checked;
+    markDirty();
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+  });
+
+  rowsWrap?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement | null;
+    const removeBtn = target?.closest<HTMLButtonElement>("button[data-status-remove-id]");
+    if (!removeBtn) return;
+    const rowId = String(removeBtn.dataset.statusRemoveId ?? "");
+    if (!rowId) return;
+    STATUS_EDITOR_ROWS_DRAFT_Event = STATUS_EDITOR_ROWS_DRAFT_Event.filter((item) => item.rowId !== rowId);
+    renderStatusRowsEvent(deps.SETTINGS_STATUS_ROWS_ID_Event);
+    markDirty();
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+  });
+
+  addBtn?.addEventListener("click", () => {
+    STATUS_EDITOR_ROWS_DRAFT_Event = [...STATUS_EDITOR_ROWS_DRAFT_Event, createStatusEditorRowDraftEvent()];
+    renderStatusRowsEvent(deps.SETTINGS_STATUS_ROWS_ID_Event);
+    markDirty();
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+  });
+
+  saveBtn?.addEventListener("click", () => {
+    const existing = deps.getActiveStatusesEvent();
+    const validated = validateStatusRowsEvent(STATUS_EDITOR_ROWS_DRAFT_Event, existing);
+    if (validated.errors.length > 0) {
+      renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, validated.errors);
+      return;
+    }
+    deps.setActiveStatusesEvent(validated.statuses);
+    STATUS_EDITOR_ROWS_DRAFT_Event = deserializeActiveStatusesToDraftRowsEvent(validated.statuses);
+    STATUS_EDITOR_LAST_SNAPSHOT_Event = buildStatusDraftSnapshotEvent(STATUS_EDITOR_ROWS_DRAFT_Event);
+    STATUS_EDITOR_LAST_META_SNAPSHOT_Event = JSON.stringify(
+      validated.statuses.map((item) => ({
+        name: item.name,
+        modifier: item.modifier,
+        scope: item.scope,
+        skills: item.scope === "all" ? [] : item.skills,
+        enabled: item.enabled !== false,
+      }))
+    );
+    setStatusDraftDirtyEvent(false, deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event);
+    renderStatusRowsEvent(deps.SETTINGS_STATUS_ROWS_ID_Event);
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+    deps.syncSettingsUiEvent?.();
+    deps.pushToChat?.("状态编辑器：已保存并生效。");
+  });
+
+  resetBtn?.addEventListener("click", () => {
+    STATUS_EDITOR_ROWS_DRAFT_Event = [];
+    deps.setActiveStatusesEvent([]);
+    STATUS_EDITOR_LAST_SNAPSHOT_Event = buildStatusDraftSnapshotEvent(STATUS_EDITOR_ROWS_DRAFT_Event);
+    STATUS_EDITOR_LAST_META_SNAPSHOT_Event = "[]";
+    setStatusDraftDirtyEvent(false, deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event);
+    renderStatusRowsEvent(deps.SETTINGS_STATUS_ROWS_ID_Event);
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
+    deps.syncSettingsUiEvent?.();
+    deps.pushToChat?.("状态编辑器：已重置为空。");
+  });
+}
+
+
 export interface BindMountedSettingsCardDepsEvent {
   drawerToggleId: string;
   drawerContentId: string;
@@ -822,6 +1333,7 @@ export interface BindMountedSettingsCardDepsEvent {
   skillPresetActionsDepsEvent: BindSkillPresetActionsDepsEvent;
   skillRowsEditingActionsDepsEvent: BindSkillRowsEditingActionsDepsEvent;
   skillImportExportActionsDepsEvent: BindSkillImportExportActionsDepsEvent;
+  statusEditorActionsDepsEvent: BindStatusEditorActionsDepsEvent;
   ruleTextActionsDepsEvent: BindRuleTextActionsDepsEvent;
 }
 
@@ -835,6 +1347,7 @@ export function bindMountedSettingsCardEvent(deps: BindMountedSettingsCardDepsEv
   bindSkillPresetActionsEvent(deps.skillPresetActionsDepsEvent);
   bindSkillRowsEditingActionsEvent(deps.skillRowsEditingActionsDepsEvent);
   bindSkillImportExportActionsEvent(deps.skillImportExportActionsDepsEvent);
+  bindStatusEditorActionsEvent(deps.statusEditorActionsDepsEvent);
   bindRuleTextActionsEvent(deps.ruleTextActionsDepsEvent);
 }
 
@@ -1252,7 +1765,12 @@ export interface SyncSettingsUiDepsEvent {
     enabled: boolean;
     autoSendRuleToAI: boolean;
     enableAiRollMode: boolean;
+    enableAiRoundControl: boolean;
     enableExplodingDice: boolean;
+    enableAdvantageSystem: boolean;
+    enableDynamicResultGuidance: boolean;
+    enableDynamicDcReason: boolean;
+    enableStatusSystem: boolean;
     aiAllowedDiceSidesText: string;
     summaryDetailMode: string;
     summaryHistoryRounds: number;
@@ -1271,7 +1789,12 @@ export interface SyncSettingsUiDepsEvent {
   SETTINGS_ENABLED_ID_Event: string;
   SETTINGS_RULE_ID_Event: string;
   SETTINGS_AI_ROLL_MODE_ID_Event: string;
+  SETTINGS_AI_ROUND_CONTROL_ID_Event: string;
   SETTINGS_EXPLODING_ENABLED_ID_Event: string;
+  SETTINGS_ADVANTAGE_ENABLED_ID_Event: string;
+  SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event: string;
+  SETTINGS_DYNAMIC_DC_REASON_ID_Event: string;
+  SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event: string;
   SETTINGS_ALLOWED_DICE_SIDES_ID_Event: string;
   SETTINGS_SUMMARY_DETAIL_ID_Event: string;
   SETTINGS_SUMMARY_ROUNDS_ID_Event: string;
@@ -1284,8 +1807,13 @@ export interface SyncSettingsUiDepsEvent {
   SETTINGS_TIME_LIMIT_MIN_ID_Event: string;
   SETTINGS_TIME_LIMIT_ROW_ID_Event: string;
   SETTINGS_SKILL_ENABLED_ID_Event: string;
+  SETTINGS_STATUS_EDITOR_OPEN_ID_Event: string;
+  SETTINGS_STATUS_ROWS_ID_Event: string;
+  SETTINGS_STATUS_ERRORS_ID_Event: string;
+  SETTINGS_STATUS_DIRTY_HINT_ID_Event: string;
   SETTINGS_RULE_TEXT_ID_Event: string;
   SETTINGS_SKILL_ROWS_ID_Event: string;
+  getActiveStatusesEvent: () => ActiveStatusEvent[];
   isSkillDraftDirtyEvent: () => boolean;
   hydrateSkillDraftFromSettingsEvent: () => void;
   DEFAULT_RULE_TEXT_Event: string;
@@ -1300,8 +1828,23 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   const aiRollModeInput = document.getElementById(
     deps.SETTINGS_AI_ROLL_MODE_ID_Event
   ) as HTMLInputElement | null;
+  const aiRoundControlInput = document.getElementById(
+    deps.SETTINGS_AI_ROUND_CONTROL_ID_Event
+  ) as HTMLInputElement | null;
   const explodingEnabledInput = document.getElementById(
     deps.SETTINGS_EXPLODING_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const advantageEnabledInput = document.getElementById(
+    deps.SETTINGS_ADVANTAGE_ENABLED_ID_Event
+  ) as HTMLInputElement | null;
+  const dynamicResultGuidanceInput = document.getElementById(
+    deps.SETTINGS_DYNAMIC_RESULT_GUIDANCE_ID_Event
+  ) as HTMLInputElement | null;
+  const dynamicDcReasonInput = document.getElementById(
+    deps.SETTINGS_DYNAMIC_DC_REASON_ID_Event
+  ) as HTMLInputElement | null;
+  const statusSystemEnabledInput = document.getElementById(
+    deps.SETTINGS_STATUS_SYSTEM_ENABLED_ID_Event
   ) as HTMLInputElement | null;
   const allowedDiceSidesInput = document.getElementById(
     deps.SETTINGS_ALLOWED_DICE_SIDES_ID_Event
@@ -1335,6 +1878,9 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   const skillEnabledInput = document.getElementById(
     deps.SETTINGS_SKILL_ENABLED_ID_Event
   ) as HTMLInputElement | null;
+  const statusEditorOpenBtn = document.getElementById(
+    deps.SETTINGS_STATUS_EDITOR_OPEN_ID_Event
+  ) as HTMLButtonElement | null;
   const ruleTextInput = document.getElementById(
     deps.SETTINGS_RULE_TEXT_ID_Event
   ) as HTMLTextAreaElement | null;
@@ -1342,7 +1888,18 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   if (enabledInput) enabledInput.checked = Boolean(settings.enabled);
   if (ruleInput) ruleInput.checked = Boolean(settings.autoSendRuleToAI);
   if (aiRollModeInput) aiRollModeInput.checked = Boolean(settings.enableAiRollMode);
+  if (aiRoundControlInput) aiRoundControlInput.checked = Boolean(settings.enableAiRoundControl);
   if (explodingEnabledInput) explodingEnabledInput.checked = Boolean(settings.enableExplodingDice);
+  if (advantageEnabledInput) advantageEnabledInput.checked = Boolean(settings.enableAdvantageSystem);
+  if (dynamicResultGuidanceInput) {
+    dynamicResultGuidanceInput.checked = Boolean(settings.enableDynamicResultGuidance);
+  }
+  if (dynamicDcReasonInput) {
+    dynamicDcReasonInput.checked = Boolean(settings.enableDynamicDcReason);
+  }
+  if (statusSystemEnabledInput) {
+    statusSystemEnabledInput.checked = Boolean(settings.enableStatusSystem);
+  }
   if (allowedDiceSidesInput) allowedDiceSidesInput.value = String(settings.aiAllowedDiceSidesText || "");
   if (summaryDetailInput) summaryDetailInput.value = settings.summaryDetailMode;
   if (summaryRoundsInput) summaryRoundsInput.value = String(settings.summaryHistoryRounds);
@@ -1376,6 +1933,23 @@ export function syncSettingsUiEvent(deps: SyncSettingsUiDepsEvent): void {
   minTimeLimitRow?.classList.toggle("is-disabled", !settings.enableTimeLimit);
   if (skillEnabledInput) {
     skillEnabledInput.checked = Boolean(settings.enableSkillSystem);
+  }
+  if (statusEditorOpenBtn) {
+    statusEditorOpenBtn.disabled = !settings.enableStatusSystem;
+    statusEditorOpenBtn.style.opacity = settings.enableStatusSystem ? "1" : "0.5";
+  }
+
+  const statusRowsWrap = document.getElementById(deps.SETTINGS_STATUS_ROWS_ID_Event) as HTMLElement | null;
+  if (
+    statusRowsWrap &&
+    (!STATUS_EDITOR_DIRTY_Event || !statusRowsWrap.hasChildNodes())
+  ) {
+    hydrateStatusDraftFromMetaEvent(
+      deps.getActiveStatusesEvent(),
+      deps.SETTINGS_STATUS_ROWS_ID_Event,
+      deps.SETTINGS_STATUS_DIRTY_HINT_ID_Event
+    );
+    renderStatusValidationErrorsEvent(deps.SETTINGS_STATUS_ERRORS_ID_Event, []);
   }
   if (!deps.isSkillDraftDirtyEvent()) {
     const currentSettingsText = String(settings.skillTableText ?? "{}");

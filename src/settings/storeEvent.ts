@@ -1,5 +1,6 @@
 import type { DiceMeta, DiceResult } from "../types/diceEvent";
 import type {
+  ActiveStatusEvent,
   DiceMetaEvent,
   DicePluginSettingsEvent,
   SkillEditorRowDraftEvent,
@@ -68,7 +69,11 @@ export function getDiceMetaEvent(): DiceMetaEvent {
   if (!root.diceRollerEvent || typeof root.diceRollerEvent !== "object") {
     root.diceRollerEvent = {};
   }
-  return root.diceRollerEvent as DiceMetaEvent;
+  const meta = root.diceRollerEvent as DiceMetaEvent;
+  if (!Array.isArray(meta.activeStatuses)) {
+    meta.activeStatuses = [];
+  }
+  return meta;
 }
 
 export function saveMetadataSafeEvent(): void {
@@ -121,7 +126,12 @@ export function getSettingsEvent(): DicePluginSettingsEvent {
   bucket.enabled = bucket.enabled !== false;
   bucket.autoSendRuleToAI = bucket.autoSendRuleToAI !== false;
   bucket.enableAiRollMode = bucket.enableAiRollMode !== false;
+  bucket.enableAiRoundControl = bucket.enableAiRoundControl === true;
   bucket.enableExplodingDice = bucket.enableExplodingDice !== false;
+  bucket.enableAdvantageSystem = bucket.enableAdvantageSystem !== false;
+  bucket.enableDynamicResultGuidance = bucket.enableDynamicResultGuidance === true;
+  bucket.enableDynamicDcReason = bucket.enableDynamicDcReason !== false;
+  bucket.enableStatusSystem = bucket.enableStatusSystem !== false;
   bucket.aiAllowedDiceSidesText =
     typeof (bucket as any).aiAllowedDiceSidesText === "string"
       ? String((bucket as any).aiAllowedDiceSidesText).trim()
@@ -169,6 +179,27 @@ export function getSettingsEvent(): DicePluginSettingsEvent {
       ? bucket.ruleText
       : DEFAULT_RULE_TEXT_Event;
   return bucket;
+}
+
+export function normalizeStatusNameKeyEvent(raw: any): string {
+  return normalizeStringFieldEvent(raw).toLowerCase();
+}
+
+export function normalizeStatusSkillKeyEvent(raw: any): string {
+  return normalizeStringFieldEvent(raw).toLowerCase();
+}
+
+export function ensureActiveStatusesEvent(meta = getDiceMetaEvent()): ActiveStatusEvent[] {
+  if (!Array.isArray(meta.activeStatuses)) {
+    meta.activeStatuses = [];
+  }
+  return meta.activeStatuses;
+}
+
+export function setActiveStatusesEvent(statuses: ActiveStatusEvent[]): void {
+  const meta = getDiceMetaEvent();
+  meta.activeStatuses = Array.isArray(statuses) ? statuses : [];
+  saveMetadataSafeEvent();
 }
 
 export function updateSettingsEvent(patch: Partial<DicePluginSettingsEvent>): void {

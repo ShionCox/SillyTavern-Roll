@@ -23,6 +23,7 @@ export interface HandleGenerationEndedDepsEvent {
   getSettingsEvent: () => {
     enabled: boolean;
     eventApplyScope: "protagonist_only" | "all";
+    enableAiRoundControl: boolean;
   };
   getLiveContextEvent: () => STContext | null;
   findLatestAssistantEvent: (
@@ -35,6 +36,7 @@ export interface HandleGenerationEndedDepsEvent {
   parseEventEnvelopesEvent: (text: string) => {
     events: DiceEventSpecEvent[];
     ranges: Array<{ start: number; end: number }>;
+    shouldEndRound: boolean;
   };
   filterEventsByApplyScopeEvent: (
     events: DiceEventSpecEvent[],
@@ -84,18 +86,21 @@ export function handleGenerationEndedEvent(
   let chosenText = "";
   let chosenEvents: DiceEventSpecEvent[] = [];
   let chosenRanges: Array<{ start: number; end: number }> = [];
+  let chosenShouldEndRound = false;
   for (const sourceText of sourceCandidates) {
     const parsed = deps.parseEventEnvelopesEvent(sourceText);
     if (parsed.events.length > 0 || parsed.ranges.length > 0) {
       chosenText = sourceText;
       chosenEvents = parsed.events;
       chosenRanges = parsed.ranges;
+      chosenShouldEndRound = parsed.shouldEndRound;
       break;
     }
     if (!chosenText) {
       chosenText = sourceText;
       chosenEvents = parsed.events;
       chosenRanges = parsed.ranges;
+      chosenShouldEndRound = parsed.shouldEndRound;
     }
   }
 
@@ -129,6 +134,16 @@ export function handleGenerationEndedEvent(
     deps.persistChatSafeEvent();
   }
 
+  let closedByAiDirective = false;
+  const pendingRound = meta.pendingRound;
+  if (pendingRound?.status === "open") {
+    if (settings.enableAiRoundControl && chosenShouldEndRound) {
+      pendingRound.status = "closed";
+      closedByAiDirective = true;
+      console.info("[骰子插件] AI 指令结束当前轮次（round_control=end_round）");
+    }
+  }
+
   if (events.length > 0) {
     const round = deps.mergeEventsIntoPendingRoundEvent(events, assistantMsgId);
     const autoRollCards = deps.autoRollEventsByAiModeEvent(round);
@@ -142,6 +157,9 @@ export function handleGenerationEndedEvent(
   } else {
     if (chosenEvents.length > 0 && settings.eventApplyScope === "protagonist_only") {
       console.info("[骰子插件] 事件已按“仅主角行动事件”过滤，本次无可用事件");
+    }
+    if (closedByAiDirective) {
+      console.info("[骰子插件] 当前轮次已结束，等待下一轮事件");
     }
     deps.saveMetadataSafeEvent();
   }
@@ -263,6 +281,8 @@ export function clearDiceMetaEventState(
 
   delete meta.pendingRound;
   delete meta.outboundSummary;
+  delete meta.pendingResultGuidanceQueue;
+  delete meta.outboundResultGuidance;
   delete meta.summaryHistory;
   delete meta.lastPromptUserMsgId;
   delete meta.lastProcessedAssistantMsgId;

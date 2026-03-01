@@ -1,5 +1,6 @@
 import { parseDiceExpression } from "../core/diceEngineEvent";
 import type {
+  AdvantageStateEvent,
   CompareOperatorEvent,
   DiceEventSpecEvent,
   DicePluginSettingsEvent,
@@ -31,9 +32,20 @@ export function normalizeOutcomeTextEvent(
   if (!text) return undefined;
   if (text.length <= OUTCOME_TEXT_MAX_LEN_Event) return text;
   const truncated = text.slice(0, OUTCOME_TEXT_MAX_LEN_Event);
-  console.warn(
-    `[骰子插件] outcomes.${fieldName} 过长，已截断: event=${eventId} len=${text.length}`
-  );
+  console.warn(`[骰子插件] outcomes.${fieldName} 过长，已截断: event=${eventId} len=${text.length}`);
+  return `${truncated}（已截断）`;
+}
+
+function normalizeDcReasonTextEvent(
+  raw: any,
+  eventId: string,
+  maxLen: number
+): string | undefined {
+  const text = normalizeStringFieldEvent(raw);
+  if (!text) return undefined;
+  if (text.length <= maxLen) return text;
+  const truncated = text.slice(0, maxLen);
+  console.warn(`[骰子插件] dc_reason 过长，已截断: event=${eventId} len=${text.length}`);
   return `${truncated}（已截断）`;
 }
 
@@ -50,21 +62,16 @@ export function normalizeOutcomesEvent(
   return { success, failure, explode };
 }
 
-export function parseIsoDurationToMsEvent(
-  raw: string,
-  ISO_8601_DURATION_REGEX_Event: RegExp
-): number | null {
+export function parseIsoDurationToMsEvent(raw: string, ISO_8601_DURATION_REGEX_Event: RegExp): number | null {
   const value = normalizeStringFieldEvent(raw);
   if (!value) return null;
   if (!ISO_8601_DURATION_REGEX_Event.test(value)) {
-    console.warn("[骰子插件] 非法 timeLimit，已按不限时处理:", value);
+    console.warn("[骰子插件] 非法 timeLimit，按不限时处理:", value);
     return null;
   }
-  const match = value.match(
-    /^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i
-  );
+  const match = value.match(/^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i);
   if (!match) {
-    console.warn("[骰子插件] 不支持的 timeLimit 组合，已按不限时处理:", value);
+    console.warn("[骰子插件] 不支持的 timeLimit 组合，按不限时处理:", value);
     return null;
   }
 
@@ -76,7 +83,7 @@ export function parseIsoDurationToMsEvent(
   const totalSeconds = (((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds;
   const totalMs = totalSeconds * 1000;
   if (!Number.isFinite(totalMs) || totalMs < 0) {
-    console.warn("[骰子插件] timeLimit 解析失败，已按不限时处理:", value);
+    console.warn("[骰子插件] timeLimit 解析失败，按不限时处理:", value);
     return null;
   }
   return totalMs;
@@ -91,9 +98,7 @@ export function applyTimeLimitPolicyMsEvent(
   const minSeconds = Math.max(1, Math.floor(Number(settings.minTimeLimitSeconds) || 1));
   const minMs = minSeconds * 1000;
   if (durationMs < minMs) {
-    console.info(
-      `[骰子插件] timeLimit 低于最短时限，已提升到 ${minSeconds}s（原始 ${durationMs}ms）`
-    );
+    console.info(`[骰子插件] timeLimit 低于最短时限，提升到 ${minSeconds}s（原始 ${durationMs}ms）`);
     return minMs;
   }
   return durationMs;
@@ -114,12 +119,7 @@ export function normalizeEventScopeTagEvent(raw: any): EventScopeTagEvent | unde
   if (value === "all" || value === "any" || value === "both") {
     return "all";
   }
-  if (
-    value === "character" ||
-    value === "assistant" ||
-    value === "npc" ||
-    value === "self"
-  ) {
+  if (value === "character" || value === "assistant" || value === "npc" || value === "self") {
     return "character";
   }
   return undefined;
@@ -133,6 +133,33 @@ export function normalizeEventRollModeEvent(raw: any): EventRollModeEvent | unde
   }
   if (value === "manual" || value === "user" || value === "player") {
     return "manual";
+  }
+  return undefined;
+}
+
+export function normalizeAdvantageStateEvent(raw: any): AdvantageStateEvent | undefined {
+  const value = normalizeStringFieldEvent(raw).toLowerCase();
+  if (!value) return undefined;
+  if (
+    value === "advantage" ||
+    value === "adv" ||
+    value === "up" ||
+    value === "high" ||
+    value === "benefit"
+  ) {
+    return "advantage";
+  }
+  if (
+    value === "disadvantage" ||
+    value === "dis" ||
+    value === "down" ||
+    value === "low" ||
+    value === "penalty"
+  ) {
+    return "disadvantage";
+  }
+  if (value === "normal" || value === "none" || value === "neutral" || value === "off") {
+    return "normal";
   }
   return undefined;
 }
@@ -152,12 +179,7 @@ export function normalizeEventTargetTypeEvent(raw: any): EventTargetTypeEvent | 
   if (value === "scene" || value === "situation" || value === "environment" || value === "context") {
     return "scene";
   }
-  if (
-    value === "supporting" ||
-    value === "character" ||
-    value === "npc" ||
-    value === "assistant"
-  ) {
+  if (value === "supporting" || value === "character" || value === "npc" || value === "assistant") {
     return "supporting";
   }
   if (value === "object" || value === "item" || value === "thing" || value === "prop") {
@@ -172,10 +194,10 @@ export function normalizeEventTargetTypeEvent(raw: any): EventTargetTypeEvent | 
 export function formatEventTargetLabelEvent(type: EventTargetTypeEvent, name?: string): string {
   const normalizedName = normalizeStringFieldEvent(name);
   if (type === "self") return "主角自己";
-  if (type === "scene") return "情景";
-  if (type === "supporting") return normalizedName ? `配角${normalizedName}` : "配角";
-  if (type === "object") return normalizedName ? `物件${normalizedName}` : "物件";
-  return normalizedName ? `其他对象${normalizedName}` : "其他对象";
+  if (type === "scene") return "场景";
+  if (type === "supporting") return normalizedName ? `配角 ${normalizedName}` : "配角";
+  if (type === "object") return normalizedName ? `物件 ${normalizedName}` : "物件";
+  return normalizedName ? `其他对象 ${normalizedName}` : "其他对象";
 }
 
 export function resolveEventTargetEvent(
@@ -186,9 +208,7 @@ export function resolveEventTargetEvent(
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, any>)
       : ({} as Record<string, any>);
-  let targetType = normalizeEventTargetTypeEvent(
-    payload.type ?? payload.targetType ?? payload.kind ?? raw
-  );
+  let targetType = normalizeEventTargetTypeEvent(payload.type ?? payload.targetType ?? payload.kind ?? raw);
   const targetName = normalizeStringFieldEvent(
     payload.name ?? payload.targetName ?? payload.label ?? payload.value
   );
@@ -211,9 +231,7 @@ export function isLikelyProtagonistActionEvent(event: DiceEventSpecEvent): boole
   if (event.scope === "protagonist" || event.scope === "all") return true;
   if (event.scope === "character") return false;
   const text = `${event.title}\n${event.desc}\n${event.skill}\n${event.targetLabel}`;
-  return /(你|你要|你需要|你必须|玩家|主角|\byou\b|\byour\b|\bplayer\b|\bprotagonist\b)/i.test(
-    text
-  );
+  return /(\byou\b|\byour\b|\bplayer\b|\bprotagonist\b|主角|玩家|你)/i.test(text);
 }
 
 export function filterEventsByApplyScopeEvent(
@@ -234,7 +252,7 @@ export function parseAllowedDiceSidesSetEvent(raw: string): Set<number> | null {
   const text = normalizeStringFieldEvent(raw);
   if (!text) return null;
   const parts = text
-    .split(/[，,\s]+/)
+    .split(/[,\s]+/)
     .map((item) => Number(item.trim()))
     .filter((value) => Number.isFinite(value) && value > 0 && Number.isInteger(value));
   if (parts.length === 0) return null;
@@ -254,7 +272,6 @@ export function isDiceExpressionAllowedBySettingsEvent(
     return false;
   }
 }
-
 
 export function normalizeDiceExpressionByAllowedSidesEvent(
   checkDice: string,
@@ -277,7 +294,11 @@ export function normalizeDiceExpressionByAllowedSidesEvent(
 
   const nextSides = allowedSides[0];
   const modifierText = parsed.modifier === 0 ? "" : parsed.modifier > 0 ? `+${parsed.modifier}` : String(parsed.modifier);
-  const nextExpr = `${parsed.count}d${nextSides}${parsed.explode ? "!" : ""}${modifierText}`;
+  const keepText =
+    parsed.keepMode && parsed.keepCount
+      ? `${parsed.keepMode}${parsed.keepCount}`
+      : "";
+  const nextExpr = `${parsed.count}d${nextSides}${parsed.explode ? "!" : ""}${keepText}${modifierText}`;
 
   return {
     nextExpr,
@@ -286,10 +307,7 @@ export function normalizeDiceExpressionByAllowedSidesEvent(
   };
 }
 
-export function normalizeEventSpecEvent(
-  raw: any,
-  deps: NormalizeEventSpecDepsEvent
-): DiceEventSpecEvent | null {
+export function normalizeEventSpecEvent(raw: any, deps: NormalizeEventSpecDepsEvent): DiceEventSpecEvent | null {
   if (!raw || typeof raw !== "object") return null;
 
   const id = normalizeStringFieldEvent(raw.id);
@@ -305,7 +323,15 @@ export function normalizeEventSpecEvent(
     scope
   );
   const rollMode = normalizeEventRollModeEvent(raw.rollMode);
+  const advantageState = normalizeAdvantageStateEvent(
+    raw.advantageState ?? raw.advantage ?? raw.advState
+  );
   const dc = Number(raw.dc);
+  const dcReason = normalizeDcReasonTextEvent(
+    raw.dc_reason ?? raw.dcReason,
+    id || "unknown_event",
+    deps.OUTCOME_TEXT_MAX_LEN_Event
+  );
   const aliasOutcomes = {
     success: raw.successOutcome,
     failure: raw.failureOutcome,
@@ -335,7 +361,7 @@ export function normalizeEventSpecEvent(
     const normalized = normalizeDiceExpressionByAllowedSidesEvent(checkDice, settings);
     if (normalized.changed) {
       console.warn(
-        `[骰子插件] 事件骰式不在允许面数列表中，已自动修正: event=${id} from=${checkDice} to=${normalized.nextExpr} allowed=${normalized.allowedSidesText || "(未配置)"}`
+        `[骰子插件] 事件骰式不在允许面数列表中，自动修正: event=${id} from=${checkDice} to=${normalized.nextExpr} allowed=${normalized.allowedSidesText || "(未配置)"}`
       );
       checkDice = normalized.nextExpr;
     } else {
@@ -355,6 +381,7 @@ export function normalizeEventSpecEvent(
     compare,
     scope,
     rollMode,
+    advantageState,
     skill,
     targetType: resolvedTarget.targetType,
     targetName: resolvedTarget.targetName,
@@ -362,20 +389,40 @@ export function normalizeEventSpecEvent(
     timeLimitMs,
     timeLimit,
     desc,
+    dcReason,
     outcomes,
   };
 }
 
 export interface NormalizeEnvelopeDepsEvent extends NormalizeEventSpecDepsEvent {}
 
+function normalizeRoundControlEndFlagEvent(raw: any): boolean {
+  if (!raw || typeof raw !== "object") return false;
+  const payload = raw as Record<string, any>;
+  const endRoundRaw = payload.end_round ?? payload.endRound;
+  if (endRoundRaw === true) return true;
+
+  const roundControlText = normalizeStringFieldEvent(
+    payload.round_control ?? payload.roundControl ?? payload.round_action ?? payload.roundAction
+  ).toLowerCase();
+  if (!roundControlText) return false;
+  return (
+    roundControlText === "end_round" ||
+    roundControlText === "end" ||
+    roundControlText === "close" ||
+    roundControlText === "new_round"
+  );
+}
+
 export function normalizeEnvelopeEvent(
   raw: any,
   deps: NormalizeEnvelopeDepsEvent
-): { events: DiceEventSpecEvent[] } | null {
+): { events: DiceEventSpecEvent[]; shouldEndRound: boolean } | null {
   if (!raw || typeof raw !== "object") return null;
   if (raw.type !== "dice_events") return null;
   if (String(raw.version) !== "1") return null;
   if (!Array.isArray(raw.events)) return null;
+  const shouldEndRound = normalizeRoundControlEndFlagEvent(raw);
 
   const events: DiceEventSpecEvent[] = [];
   for (const candidate of raw.events) {
@@ -386,8 +433,8 @@ export function normalizeEnvelopeEvent(
     }
     events.push(normalized);
   }
-  if (events.length === 0) return null;
-  return { events };
+  if (events.length === 0 && !shouldEndRound) return null;
+  return { events, shouldEndRound };
 }
 
 export function repairAndParseEventJsonEvent(rawInput: string): any | null {
@@ -492,6 +539,7 @@ export function repairAndParseEventJsonEvent(rawInput: string): any | null {
     try {
       return JSON.parse(candidate);
     } catch {
+      // ignore
     }
   }
   return null;
@@ -517,13 +565,11 @@ export function decodeHtmlEntitiesEvent(input: string): string {
 export function parseEventEnvelopesEvent(
   text: string,
   deps: NormalizeEnvelopeDepsEvent
-): {
-  events: DiceEventSpecEvent[];
-  ranges: RemovalRangeEvent[];
-} {
+): { events: DiceEventSpecEvent[]; ranges: RemovalRangeEvent[]; shouldEndRound: boolean } {
   const regex = /```(?:rolljson|json)?\s*([\s\S]*?)```/gi;
   const ranges: RemovalRangeEvent[] = [];
   const events: DiceEventSpecEvent[] = [];
+  let shouldEndRound = false;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
@@ -540,14 +586,14 @@ export function parseEventEnvelopesEvent(
       if (!parsed) throw new Error("无法修复为合法 JSON");
     } catch (error) {
       if (hasDiceEventType) {
-        console.warn("[骰子插件] 事件块 JSON 解析失败，已隐藏代码块", error);
+        console.warn("[骰子插件] 事件 JSON 解析失败，已隐藏代码块", error);
       }
       continue;
     }
     const normalized = normalizeEnvelopeEvent(parsed, deps);
     if (!normalized) continue;
-
     events.push(...normalized.events);
+    if (normalized.shouldEndRound) shouldEndRound = true;
   }
 
   const htmlRegex = /<pre\b[\s\S]*?<\/pre>/gi;
@@ -569,7 +615,7 @@ export function parseEventEnvelopesEvent(
       if (!parsed) throw new Error("无法修复为合法 JSON");
     } catch (error) {
       if (hasDiceEventType) {
-        console.warn("[骰子插件] HTML 事件块 JSON 解析失败，已隐藏代码块", error);
+        console.warn("[骰子插件] HTML 事件 JSON 解析失败，已隐藏代码块", error);
       }
       continue;
     }
@@ -577,9 +623,10 @@ export function parseEventEnvelopesEvent(
     const normalized = normalizeEnvelopeEvent(parsed, deps);
     if (!normalized) continue;
     events.push(...normalized.events);
+    if (normalized.shouldEndRound) shouldEndRound = true;
   }
 
-  return { events, ranges };
+  return { events, ranges, shouldEndRound };
 }
 
 export function removeRangesEvent(

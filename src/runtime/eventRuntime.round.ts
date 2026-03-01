@@ -7,6 +7,12 @@ import {
   DEFAULT_RULE_TEXT_Event,
   DICE_RULE_BLOCK_END_Event,
   DICE_RULE_BLOCK_START_Event,
+  DICE_RESULT_GUIDANCE_BLOCK_END_Event,
+  DICE_RESULT_GUIDANCE_BLOCK_START_Event,
+  DICE_RUNTIME_POLICY_BLOCK_START_Event,
+  DICE_RUNTIME_POLICY_BLOCK_END_Event,
+  DICE_ACTIVE_STATUSES_BLOCK_START_Event,
+  DICE_ACTIVE_STATUSES_BLOCK_END_Event,
   DICE_SUMMARY_BLOCK_END_Event,
   DICE_SUMMARY_BLOCK_START_Event,
   ISO_8601_DURATION_REGEX_Event,
@@ -18,11 +24,8 @@ import {
   SUMMARY_MAX_TOTAL_EVENT_LINES_Event,
 } from "../settings/constantsEvent";
 import {
-  getActiveSkillPresetEvent as getActiveSkillPresetStoreEvent,
   getDiceMetaEvent as getDiceMetaStoreMetaEvent,
   getSettingsEvent as getSettingsStoreEvent,
-  getSkillModifierTableMapEvent as getSkillModifierTableMapStoreEvent,
-  getSkillPresetStoreEvent as getSkillPresetStoreStoreEvent,
   resolveSkillModifierBySkillNameEvent as resolveSkillModifierBySkillNameStoreEvent,
   saveMetadataSafeEvent as saveMetadataSafeStoreEvent,
 } from "../settings/storeEvent";
@@ -80,6 +83,7 @@ export function ensureRoundEventTimersSyncedEvent(round: PendingRoundEvent): voi
 export function parseEventEnvelopesEvent(text: string): {
   events: DiceEventSpecEvent[];
   ranges: RemovalRangeEvent[];
+  shouldEndRound: boolean;
 } {
   return parseEventEnvelopesModuleEvent(text, {
     getSettingsEvent: getSettingsStoreEvent,
@@ -105,6 +109,7 @@ export function createTimeoutFailureRecordEvent(
 ): EventRollRecordEvent {
   return createTimeoutFailureRecordModuleEvent(round, event, now, {
     getSettingsEvent: getSettingsStoreEvent,
+    getDiceMetaEvent: getDiceMetaStoreMetaEvent,
     normalizeCompareOperatorEvent: normalizeCompareOperatorModuleEvent,
     createSyntheticTimeoutDiceResultEvent,
     resolveSkillModifierBySkillNameEvent: resolveSkillModifierBySkillNameStoreEvent,
@@ -199,12 +204,17 @@ export function handlePromptReadyEvent(payload: any, sourceEvent = "unknown"): v
     payload,
     {
       getSettingsEvent: getSettingsStoreEvent,
-      getSkillModifierTableMapEvent: getSkillModifierTableMapStoreEvent,
-      getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
-      getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
       DEFAULT_RULE_TEXT_Event,
       DICE_RULE_BLOCK_START_Event,
       DICE_RULE_BLOCK_END_Event,
+      DICE_SUMMARY_BLOCK_START_Event,
+      DICE_SUMMARY_BLOCK_END_Event,
+      DICE_RESULT_GUIDANCE_BLOCK_START_Event,
+      DICE_RESULT_GUIDANCE_BLOCK_END_Event,
+      DICE_RUNTIME_POLICY_BLOCK_START_Event,
+      DICE_RUNTIME_POLICY_BLOCK_END_Event,
+      DICE_ACTIVE_STATUSES_BLOCK_START_Event,
+      DICE_ACTIVE_STATUSES_BLOCK_END_Event,
       sweepTimeoutFailuresEvent,
       getDiceMetaEvent: getDiceMetaStoreMetaEvent,
       ensureSummaryHistoryEvent: ensureSummaryHistoryModuleEvent,

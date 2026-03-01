@@ -1,4 +1,5 @@
 import { formatModifier } from "../core/utilsEvent";
+import { stripStatusTagsFromTextEvent } from "./statusEvent";
 import type {
   CompareOperatorEvent,
   DiceEventSpecEvent,
@@ -67,17 +68,27 @@ export function createRoundSummarySnapshotEvent(
       checkDice: event.checkDice,
       compare: deps.normalizeCompareOperatorEvent(event.compare) ?? ">=",
       dc: Number.isFinite(event.dc) ? Number(event.dc) : 0,
+      dcReason: String(event.dcReason || ""),
       rollMode: event.rollMode === "auto" ? "auto" : "manual",
+      advantageState: normalizeAdvantageStateForSummaryEvent(
+        record?.advantageStateApplied ?? event.advantageState
+      ),
       timeLimit: event.timeLimit ?? "none",
       status,
       resultSource: record?.source ?? null,
       total,
       skillModifierApplied: Number(record?.skillModifierApplied ?? 0),
+      statusModifierApplied: Number(record?.statusModifierApplied ?? 0),
       baseModifierUsed: Number(record?.baseModifierUsed ?? 0),
       finalModifierUsed: Number(record?.finalModifierUsed ?? 0),
       success,
+      marginToDc:
+        typeof record?.marginToDc === "number" && Number.isFinite(record.marginToDc)
+          ? Number(record.marginToDc)
+          : null,
+      resultGrade: (record?.resultGrade as any) ?? null,
       outcomeKind: resolvedOutcome.kind,
-      outcomeText: resolvedOutcome.text,
+      outcomeText: stripStatusTagsFromTextEvent(resolvedOutcome.text),
       explosionTriggered: resolvedOutcome.explosionTriggered,
     });
   }
@@ -105,6 +116,13 @@ export function trimSummaryHistoryEvent(
 ): void {
   if (history.length <= maxStored) return;
   history.splice(0, history.length - maxStored);
+}
+
+function normalizeAdvantageStateForSummaryEvent(raw: any): "normal" | "advantage" | "disadvantage" {
+  if (raw === "advantage" || raw === "disadvantage" || raw === "normal") {
+    return raw;
+  }
+  return "normal";
 }
 
 function normalizeSummaryInlineTextEvent(raw: string): string {
@@ -189,12 +207,15 @@ function buildSummaryEventNaturalLineByModeEvent(
   const skillModifierApplied = Number.isFinite(Number(item.skillModifierApplied))
     ? Number(item.skillModifierApplied)
     : 0;
+  const statusModifierApplied = Number.isFinite(Number(item.statusModifierApplied))
+    ? Number(item.statusModifierApplied)
+    : 0;
   const finalModifierUsed = Number.isFinite(Number(item.finalModifierUsed))
     ? Number(item.finalModifierUsed)
-    : baseModifierUsed + skillModifierApplied;
+    : baseModifierUsed + skillModifierApplied + statusModifierApplied;
   const modifierSentence = `修正 ${formatModifier(baseModifierUsed)} + 技能 ${formatModifier(
     skillModifierApplied
-  )} = ${formatModifier(finalModifierUsed)}`;
+  )} + 状态 ${formatModifier(statusModifierApplied)} = ${formatModifier(finalModifierUsed)}`;
 
   if (detailMode === "minimal") {
     return includeOutcomeInSummary
@@ -204,19 +225,23 @@ function buildSummaryEventNaturalLineByModeEvent(
 
   const skill = truncateSummaryTextEvent(item.skill, 20);
   const checkDice = truncateSummaryTextEvent(item.checkDice, 24);
-  const checkText = `${skill} ${checkDice}，条件 ${item.compare} ${item.dc}`;
+  const dcReasonText = item.dcReason ? `（DC原因：${truncateSummaryTextEvent(item.dcReason, 36)}）` : "";
+  const checkText = `${skill} ${checkDice}，条件 ${item.compare} ${item.dc}${dcReasonText}`;
+  const advantageText =
+    item.advantageState === "normal" ? "" : `｜骰态=${item.advantageState}`;
+  const gradeText = item.resultGrade ? `｜分级=${item.resultGrade}` : "";
 
   if (detailMode === "balanced") {
     return includeOutcomeInSummary
-      ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜结果：${resultSentence}｜${outcomeSentence}`
-      : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜结果：${resultSentence}`;
+      ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}${advantageText}｜${modifierSentence}｜结果：${resultSentence}${gradeText}｜${outcomeSentence}`
+      : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}${advantageText}｜${modifierSentence}｜结果：${resultSentence}${gradeText}`;
   }
 
   const sourceText = toSummarySourceTextEvent(item.resultSource);
   const timeLimit = truncateSummaryTextEvent(item.timeLimit || "none", 26);
   return includeOutcomeInSummary
-    ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}｜${outcomeSentence}`
-    : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}`;
+    ? `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}${advantageText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}${gradeText}｜${outcomeSentence}`
+    : `- 标题：${title}｜对象：${target}｜描述：${desc}｜检定：${checkText}${advantageText}｜${modifierSentence}｜来源：${sourceText}｜模式：${item.rollMode}｜时限：${timeLimit}｜结果：${resultSentence}${gradeText}`;
 }
 
 export interface BuildSummaryBlockFromHistoryDepsEvent {

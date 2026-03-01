@@ -48,6 +48,7 @@ import {
 
 const cardRenderDepsEvent = {
   getSettingsEvent: getSettingsStoreEvent,
+  getDiceMetaEvent: getDiceMetaStoreMetaEvent,
   ensureRoundEventTimersSyncedEvent,
   getLatestRollRecordForEvent,
   getEventRuntimeViewStateEvent,

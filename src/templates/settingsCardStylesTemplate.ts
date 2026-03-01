@@ -622,6 +622,181 @@ export function buildSettingsCardStylesTemplateEvent(cardId: string): string {
       background: rgba(255, 255, 255, 0.03);
     }
 
+    #${cardId} .st-roll-status-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 32000;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      max-height: none;
+      background: transparent;
+    }
+
+    #${cardId} .st-roll-status-modal:not([open]) {
+      display: none !important;
+    }
+
+    #${cardId} .st-roll-status-modal[open] {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #${cardId} .st-roll-status-modal::backdrop {
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(2px);
+    }
+
+    #${cardId} .st-roll-status-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: transparent;
+    }
+
+    #${cardId} .st-roll-status-modal-panel {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      width: min(1220px, 96vw);
+      height: min(92vh, 860px);
+      margin: 0;
+      border: 1px solid rgba(197, 160, 89, 0.38);
+      border-radius: 14px;
+      overflow: hidden;
+      background:
+        radial-gradient(110% 130% at 100% 0%, rgba(197, 160, 89, 0.14), transparent 56%),
+        linear-gradient(160deg, rgba(23, 21, 24, 0.96), rgba(15, 14, 17, 0.96));
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.46);
+    }
+
+    #${cardId} .st-roll-status-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    #${cardId} .st-roll-status-modal-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    #${cardId} .st-roll-status-modal-close {
+      min-width: 72px;
+    }
+
+    #${cardId} .st-roll-status-modal-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    #${cardId} .st-roll-status-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    #${cardId} .st-roll-status-cols {
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) 110px 120px minmax(180px, 1fr) 90px 74px;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      opacity: 0.72;
+      margin-bottom: 6px;
+      padding: 0 2px;
+      align-items: center;
+    }
+
+    #${cardId} .st-roll-status-cols span:nth-child(2),
+    #${cardId} .st-roll-status-cols span:nth-child(5),
+    #${cardId} .st-roll-status-cols span:nth-child(6) {
+      text-align: center;
+    }
+
+    #${cardId} .st-roll-status-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #${cardId} .st-roll-status-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) 110px 120px minmax(180px, 1fr) 90px 74px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #${cardId} .st-roll-status-modifier {
+      text-align: center;
+    }
+
+    #${cardId} .st-roll-status-enabled-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      opacity: 0.9;
+      user-select: none;
+    }
+
+    #${cardId} .st-roll-status-remove {
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    #${cardId} .st-roll-status-empty {
+      border: 1px dashed rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      font-size: 12px;
+      opacity: 0.7;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    #${cardId} .st-roll-status-errors {
+      border: 1px solid rgba(255, 110, 110, 0.45);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(120, 20, 20, 0.22);
+      margin-top: 8px;
+      margin-bottom: 8px;
+    }
+
+    #${cardId} .st-roll-status-error-item {
+      font-size: 12px;
+      line-height: 1.45;
+      color: #ffd2d2;
+    }
+
+    #${cardId} .st-roll-status-dirty {
+      margin-top: 8px;
+      margin-bottom: 2px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #ffe0a6;
+    }
+
     #${cardId} .st-roll-tip {
       font-size: 12px;
       line-height: 1.5;
@@ -726,6 +901,46 @@ export function buildSettingsCardStylesTemplateEvent(cardId: string): string {
       }
 
       #${cardId} .st-roll-skill-remove {
+        width: 100%;
+      }
+
+      #${cardId} .st-roll-status-modal-panel {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        border-radius: 0;
+      }
+
+      #${cardId} .st-roll-status-modal-head {
+        padding: 10px 12px;
+      }
+
+      #${cardId} .st-roll-status-modal-body {
+        padding: 10px;
+      }
+
+      #${cardId} .st-roll-status-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #${cardId} .st-roll-status-cols {
+        display: none;
+      }
+
+      #${cardId} .st-roll-status-row {
+        grid-template-columns: 1fr;
+      }
+
+      #${cardId} .st-roll-status-modifier {
+        text-align: left;
+      }
+
+      #${cardId} .st-roll-status-enabled-wrap {
+        justify-content: flex-start;
+      }
+
+      #${cardId} .st-roll-status-remove {
         width: 100%;
       }
     }

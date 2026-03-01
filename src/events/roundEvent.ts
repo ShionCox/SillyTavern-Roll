@@ -1,23 +1,197 @@
 import type { DiceOptions, DiceResult } from "../types/diceEvent";
 import type {
+  AdvantageStateEvent,
   CompareOperatorEvent,
   DiceEventSpecEvent,
   DiceMetaEvent,
   DicePluginSettingsEvent,
   EventOutcomeKindEvent,
+  EventResultGradeEvent,
   EventRollRecordEvent,
   EventRollModeEvent,
   EventTimerStateEvent,
+  PendingResultGuidanceEvent,
   PendingRoundEvent,
 } from "../types/eventDomainEvent";
+import {
+  applyStatusCommandsToMetaEvent,
+  ensureActiveStatusesEvent,
+  extractStatusCommandsAndCleanTextEvent,
+  resolveStatusModifiersForSkillEvent,
+  stripStatusTagsFromTextEvent,
+} from "./statusEvent";
+
+const ADVANTAGE_NORMAL_Event: AdvantageStateEvent = "normal";
+
+type ParseDiceExpressionFnEvent = (exprRaw: string) => {
+  count: number;
+  sides: number;
+  modifier: number;
+  explode: boolean;
+  keepMode?: "kh" | "kl";
+  keepCount?: number;
+};
+
+function normalizeAdvantageStateOrNormalEvent(raw: any): AdvantageStateEvent {
+  if (raw === "advantage" || raw === "disadvantage" || raw === "normal") return raw;
+  return ADVANTAGE_NORMAL_Event;
+}
+
+function getScoringRollsFromResultEvent(result: DiceResult): number[] {
+  if (Array.isArray(result.keptRolls) && result.keptRolls.length > 0) return result.keptRolls;
+  return Array.isArray(result.rolls) ? result.rolls : [];
+}
+
+function deriveAdvantageStateFromExpressionEvent(
+  parsed: ReturnType<ParseDiceExpressionFnEvent>
+): AdvantageStateEvent {
+  if (parsed.keepMode === "kh") return "advantage";
+  if (parsed.keepMode === "kl") return "disadvantage";
+  return ADVANTAGE_NORMAL_Event;
+}
+
+function resolveRollExecutionOptionsEvent(
+  expr: string,
+  event: DiceEventSpecEvent,
+  settings: DicePluginSettingsEvent,
+  parseDiceExpression: ParseDiceExpressionFnEvent
+): { adv: boolean; dis: boolean; advantageStateApplied: AdvantageStateEvent; errorText?: string } {
+  let parsed: ReturnType<ParseDiceExpressionFnEvent>;
+  try {
+    parsed = parseDiceExpression(expr);
+  } catch (error: any) {
+    return {
+      adv: false,
+      dis: false,
+      advantageStateApplied: ADVANTAGE_NORMAL_Event,
+      errorText: error?.message ?? String(error),
+    };
+  }
+
+  const expressionState = deriveAdvantageStateFromExpressionEvent(parsed);
+  const eventState = normalizeAdvantageStateOrNormalEvent(event.advantageState);
+  const usesKeepSelector = parsed.keepMode === "kh" || parsed.keepMode === "kl";
+
+  if (!settings.enableAdvantageSystem) {
+    if (usesKeepSelector) {
+      return {
+        adv: false,
+        dis: false,
+        advantageStateApplied: ADVANTAGE_NORMAL_Event,
+        errorText: `优势/劣势系统已关闭，当前表达式包含 kh/kl：${expr}`,
+      };
+    }
+    if (eventState !== ADVANTAGE_NORMAL_Event) {
+      return {
+        adv: false,
+        dis: false,
+        advantageStateApplied: ADVANTAGE_NORMAL_Event,
+        errorText: `优势/劣势系统已关闭，事件设置了 advantageState=${eventState}`,
+      };
+    }
+    return { adv: false, dis: false, advantageStateApplied: ADVANTAGE_NORMAL_Event };
+  }
+
+  if (usesKeepSelector) {
+    return { adv: false, dis: false, advantageStateApplied: expressionState };
+  }
+  if (eventState === "advantage") {
+    return { adv: true, dis: false, advantageStateApplied: "advantage" };
+  }
+  if (eventState === "disadvantage") {
+    return { adv: false, dis: true, advantageStateApplied: "disadvantage" };
+  }
+  return { adv: false, dis: false, advantageStateApplied: ADVANTAGE_NORMAL_Event };
+}
+
+function computeMarginToDcEvent(
+  total: number,
+  compare: CompareOperatorEvent,
+  dc: number | null
+): number | null {
+  if (dc == null || !Number.isFinite(dc) || !Number.isFinite(total)) return null;
+  switch (compare) {
+    case ">=":
+      return total - dc;
+    case ">":
+      return total - (dc + 1);
+    case "<=":
+      return dc - total;
+    case "<":
+      return dc - 1 - total;
+    default:
+      return null;
+  }
+}
+
+function detectSingleKeptDieExtremumEvent(result: DiceResult): { isCandidate: boolean } {
+  const scoringRolls = getScoringRollsFromResultEvent(result);
+  if (scoringRolls.length !== 1) return { isCandidate: false };
+  const value = Number(scoringRolls[0]);
+  const sides = Number(result.sides);
+  if (!Number.isFinite(value) || !Number.isFinite(sides) || sides <= 0) return { isCandidate: false };
+  return { isCandidate: value === 1 || value === sides };
+}
+
+function evaluateResultGradeEvent(
+  result: DiceResult,
+  success: boolean | null,
+  compareUsed: CompareOperatorEvent,
+  dcUsed: number | null,
+  source: EventRollRecordEvent["source"]
+): { resultGrade: EventResultGradeEvent; marginToDc: number | null } {
+  const marginToDc = computeMarginToDcEvent(Number(result.total), compareUsed, dcUsed);
+  if (source === "timeout_auto_fail") return { resultGrade: "failure", marginToDc };
+  if (success !== true && success !== false) return { resultGrade: "failure", marginToDc };
+
+  if (detectSingleKeptDieExtremumEvent(result).isCandidate) {
+    return success
+      ? { resultGrade: "critical_success", marginToDc }
+      : { resultGrade: "critical_failure", marginToDc };
+  }
+  if (success) {
+    if (marginToDc != null && marginToDc >= 1 && marginToDc <= 2) {
+      return { resultGrade: "partial_success", marginToDc };
+    }
+    return { resultGrade: "success", marginToDc };
+  }
+  return { resultGrade: "failure", marginToDc };
+}
+
+function ensurePendingResultGuidanceQueueEvent(meta: DiceMetaEvent): PendingResultGuidanceEvent[] {
+  if (!Array.isArray(meta.pendingResultGuidanceQueue)) {
+    meta.pendingResultGuidanceQueue = [];
+  }
+  return meta.pendingResultGuidanceQueue;
+}
+
+function enqueueResultGuidanceFromRecordEvent(
+  meta: DiceMetaEvent,
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent
+): void {
+  if (!record.resultGrade) return;
+  const queue = ensurePendingResultGuidanceQueueEvent(meta);
+  if (queue.some((item) => item.rollId === record.rollId)) return;
+  queue.push({
+    rollId: record.rollId,
+    roundId: record.roundId,
+    eventId: event.id,
+    eventTitle: event.title,
+    targetLabel: record.targetLabelUsed || event.targetLabel,
+    resultGrade: record.resultGrade,
+    marginToDc: record.marginToDc ?? null,
+    total: Number(record.result.total) || 0,
+    dcUsed: record.dcUsed ?? null,
+    compareUsed: record.compareUsed,
+    advantageStateApplied: record.advantageStateApplied,
+    source: record.source,
+    rolledAt: record.rolledAt,
+  });
+}
 
 export interface CreateSyntheticTimeoutDiceResultDepsEvent {
-  parseDiceExpression: (exprRaw: string) => {
-    count: number;
-    sides: number;
-    modifier: number;
-    explode: boolean;
-  };
+  parseDiceExpression: ParseDiceExpressionFnEvent;
 }
 
 export function createSyntheticTimeoutDiceResultEvent(
@@ -33,7 +207,7 @@ export function createSyntheticTimeoutDiceResultEvent(
     sides = parsed.sides;
     modifier = parsed.modifier;
   } catch {
-    // Keep zeros to avoid timeout settlement being interrupted by parse failures.
+    // noop
   }
   return {
     expr: event.checkDice || "timeout",
@@ -43,6 +217,7 @@ export function createSyntheticTimeoutDiceResultEvent(
     rolls: [],
     rawTotal: 0,
     total: 0,
+    selectionMode: "none",
   };
 }
 
@@ -57,29 +232,86 @@ export function applySkillModifierToDiceResultEvent(
     return { result, baseModifierUsed, finalModifierUsed };
   }
   return {
-    result: {
-      ...result,
-      modifier: finalModifierUsed,
-      total: Number(result.rawTotal) + finalModifierUsed,
-    },
+    result: { ...result, modifier: finalModifierUsed, total: Number(result.rawTotal) + finalModifierUsed },
     baseModifierUsed,
     finalModifierUsed,
   };
 }
 
-export function ensureEventTimerIndexEvent(
-  round: PendingRoundEvent
-): Record<string, EventTimerStateEvent> {
+export function applyStatusModifierToDiceResultEvent(
+  result: DiceResult,
+  statusModifier: number
+): { result: DiceResult; finalModifierUsed: number } {
+  const baseModifierUsed = Number.isFinite(Number(result.modifier)) ? Number(result.modifier) : 0;
+  const numericStatusModifier = Number.isFinite(Number(statusModifier)) ? Number(statusModifier) : 0;
+  const finalModifierUsed = baseModifierUsed + numericStatusModifier;
+  if (numericStatusModifier === 0) {
+    return { result, finalModifierUsed };
+  }
+  return {
+    result: { ...result, modifier: finalModifierUsed, total: Number(result.rawTotal) + finalModifierUsed },
+    finalModifierUsed,
+  };
+}
+
+function resolveStatusModifierBySkillNameForRollEvent(
+  skillName: string,
+  meta: DiceMetaEvent,
+  settings: DicePluginSettingsEvent
+): { modifier: number; matched: Array<{ name: string; modifier: number }> } {
+  if (!settings.enableStatusSystem) {
+    return { modifier: 0, matched: [] };
+  }
+  const statuses = ensureActiveStatusesEvent(meta);
+  return resolveStatusModifiersForSkillEvent(statuses, skillName);
+}
+
+function resolveRawOutcomeTextEvent(
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent | null | undefined,
+  settings: DicePluginSettingsEvent
+): string {
+  if (!settings.enableOutcomeBranches) return "";
+  const outcomes = event.outcomes;
+  const explosionTriggered = Boolean(record?.result?.explosionTriggered);
+  if (
+    settings.enableExplodeOutcomeBranch &&
+    explosionTriggered &&
+    outcomes?.explode &&
+    outcomes.explode.trim()
+  ) {
+    return outcomes.explode.trim();
+  }
+  if (record?.success === true) {
+    return outcomes?.success?.trim() || "判定成功，剧情向有利方向推进。";
+  }
+  if (record?.success === false || record?.source === "timeout_auto_fail") {
+    return outcomes?.failure?.trim() || "判定失败，剧情向不利方向推进。";
+  }
+  return "尚未结算。";
+}
+
+function applyOutcomeStatusEffectsFromRecordEvent(
+  meta: DiceMetaEvent,
+  event: DiceEventSpecEvent,
+  record: EventRollRecordEvent,
+  settings: DicePluginSettingsEvent
+): boolean {
+  if (!settings.enableStatusSystem) return false;
+  const rawOutcomeText = resolveRawOutcomeTextEvent(event, record, settings);
+  if (!rawOutcomeText) return false;
+  const resolved = extractStatusCommandsAndCleanTextEvent(rawOutcomeText, event.skill || "");
+  return applyStatusCommandsToMetaEvent(meta, resolved.commands, "ai_tag");
+}
+
+export function ensureEventTimerIndexEvent(round: PendingRoundEvent): Record<string, EventTimerStateEvent> {
   if (!round.eventTimers || typeof round.eventTimers !== "object") {
     round.eventTimers = {};
   }
   return round.eventTimers;
 }
 
-export function getLatestRollRecordForEvent(
-  round: PendingRoundEvent,
-  eventId: string
-): EventRollRecordEvent | null {
+export function getLatestRollRecordForEvent(round: PendingRoundEvent, eventId: string): EventRollRecordEvent | null {
   for (let i = round.rolls.length - 1; i >= 0; i--) {
     if (round.rolls[i]?.eventId === eventId) return round.rolls[i];
   }
@@ -93,10 +325,7 @@ export interface EnsureRoundEventTimersSyncedDepsEvent {
     scope?: DiceEventSpecEvent["scope"]
   ) => { targetType: DiceEventSpecEvent["targetType"]; targetName?: string; targetLabel: string };
   parseIsoDurationToMsEvent: (raw: string) => number | null;
-  applyTimeLimitPolicyMsEvent: (
-    durationMs: number | null,
-    settings: DicePluginSettingsEvent
-  ) => number | null;
+  applyTimeLimitPolicyMsEvent: (durationMs: number | null, settings: DicePluginSettingsEvent) => number | null;
 }
 
 export function ensureRoundEventTimersSyncedEvent(
@@ -134,24 +363,11 @@ export function ensureRoundEventTimersSyncedEvent(
       const deadlineAt = durationMs == null ? null : offeredAt + durationMs;
       timer = { offeredAt, deadlineAt };
       timers[event.id] = timer;
-    } else {
-      if (!Number.isFinite(timer.offeredAt)) {
-        timer.offeredAt =
-          typeof event.offeredAt === "number" && Number.isFinite(event.offeredAt) ? event.offeredAt : now;
-      }
-      if (timer.deadlineAt !== null && !Number.isFinite(timer.deadlineAt)) {
-        timer.deadlineAt =
-          typeof event.deadlineAt === "number" && Number.isFinite(event.deadlineAt)
-            ? event.deadlineAt
-            : null;
-      }
     }
 
     if (!existingRecord) {
       timer.deadlineAt = durationMs == null ? null : timer.offeredAt + durationMs;
-      if (timer.deadlineAt == null) {
-        delete timer.expiredAt;
-      }
+      if (timer.deadlineAt == null) delete timer.expiredAt;
     } else if (existingRecord.source === "timeout_auto_fail") {
       timer.expiredAt = existingRecord.timeoutAt ?? existingRecord.rolledAt;
     }
@@ -161,9 +377,7 @@ export function ensureRoundEventTimersSyncedEvent(
   }
 
   for (const key of Object.keys(timers)) {
-    if (!keepIds.has(key)) {
-      delete timers[key];
-    }
+    if (!keepIds.has(key)) delete timers[key];
   }
 }
 
@@ -172,10 +386,7 @@ export interface EnsureOpenPendingRoundDepsEvent {
   now?: () => number;
 }
 
-export function ensureOpenPendingRoundEvent(
-  meta: DiceMetaEvent,
-  deps: EnsureOpenPendingRoundDepsEvent
-): PendingRoundEvent {
+export function ensureOpenPendingRoundEvent(meta: DiceMetaEvent, deps: EnsureOpenPendingRoundDepsEvent): PendingRoundEvent {
   const status = (meta.pendingRound as any)?.status;
   const currentNow = deps.now ? deps.now() : Date.now();
   if (!meta.pendingRound || status !== "open") {
@@ -200,10 +411,7 @@ export interface MergeEventsIntoPendingRoundDepsEvent {
   getDiceMetaEvent: () => DiceMetaEvent;
   createIdEvent: (prefix: string) => string;
   parseIsoDurationToMsEvent: (raw: string) => number | null;
-  applyTimeLimitPolicyMsEvent: (
-    durationMs: number | null,
-    settings: DicePluginSettingsEvent
-  ) => number | null;
+  applyTimeLimitPolicyMsEvent: (durationMs: number | null, settings: DicePluginSettingsEvent) => number | null;
   resolveEventTargetEvent: (
     raw: any,
     scope?: DiceEventSpecEvent["scope"]
@@ -218,9 +426,7 @@ export function mergeEventsIntoPendingRoundEvent(
 ): PendingRoundEvent {
   const settings = deps.getSettingsEvent();
   const meta = deps.getDiceMetaEvent();
-  const round = ensureOpenPendingRoundEvent(meta, {
-    createIdEvent: deps.createIdEvent,
-  });
+  const round = ensureOpenPendingRoundEvent(meta, { createIdEvent: deps.createIdEvent });
   const now = Date.now();
   const timers = ensureEventTimerIndexEvent(round);
   const merged = new Map<string, DiceEventSpecEvent>();
@@ -230,10 +436,7 @@ export function mergeEventsIntoPendingRoundEvent(
     const incoming = { ...incomingRaw };
     const previous = merged.get(incoming.id);
     const existingRecord = getLatestRollRecordForEvent(round, incoming.id);
-    const next: DiceEventSpecEvent = {
-      ...(previous || {}),
-      ...incoming,
-    };
+    const next: DiceEventSpecEvent = { ...(previous || {}), ...incoming };
 
     if (!existingRecord) {
       const parsedDurationMs =
@@ -244,10 +447,7 @@ export function mergeEventsIntoPendingRoundEvent(
       next.timeLimitMs = durationMs;
       next.offeredAt = now;
       next.deadlineAt = durationMs == null ? null : now + durationMs;
-      timers[next.id] = {
-        offeredAt: next.offeredAt,
-        deadlineAt: next.deadlineAt,
-      };
+      timers[next.id] = { offeredAt: next.offeredAt, deadlineAt: next.deadlineAt };
     } else {
       const timer = timers[next.id];
       if (timer) {
@@ -266,7 +466,6 @@ export function mergeEventsIntoPendingRoundEvent(
     next.targetType = resolvedTarget.targetType;
     next.targetName = resolvedTarget.targetName;
     next.targetLabel = resolvedTarget.targetLabel;
-
     merged.set(next.id, next);
   }
 
@@ -277,9 +476,7 @@ export function mergeEventsIntoPendingRoundEvent(
     parseIsoDurationToMsEvent: deps.parseIsoDurationToMsEvent,
     applyTimeLimitPolicyMsEvent: deps.applyTimeLimitPolicyMsEvent,
   });
-  if (!round.sourceAssistantMsgIds.includes(assistantMsgId)) {
-    round.sourceAssistantMsgIds.push(assistantMsgId);
-  }
+  if (!round.sourceAssistantMsgIds.includes(assistantMsgId)) round.sourceAssistantMsgIds.push(assistantMsgId);
   deps.saveMetadataSafeEvent();
   return round;
 }
@@ -292,7 +489,6 @@ export function resolveTriggeredOutcomeEvent(
   if (!settings.enableOutcomeBranches) {
     return { kind: "none", text: "走向分支已关闭。", explosionTriggered: false };
   }
-
   const outcomes = event.outcomes;
   const explosionTriggered = Boolean(record?.result?.explosionTriggered);
   if (
@@ -303,33 +499,21 @@ export function resolveTriggeredOutcomeEvent(
   ) {
     return { kind: "explode", text: outcomes.explode.trim(), explosionTriggered: true };
   }
-
   if (record?.success === true) {
-    return {
-      kind: "success",
-      text: outcomes?.success?.trim() || "判定成功，剧情向有利方向推进。",
-      explosionTriggered,
-    };
+    return { kind: "success", text: outcomes?.success?.trim() || "判定成功，剧情向有利方向推进。", explosionTriggered };
   }
   if (record?.success === false || record?.source === "timeout_auto_fail") {
-    return {
-      kind: "failure",
-      text: outcomes?.failure?.trim() || "判定失败，剧情向不利方向推进。",
-      explosionTriggered,
-    };
+    return { kind: "failure", text: outcomes?.failure?.trim() || "判定失败，剧情向不利方向推进。", explosionTriggered };
   }
-
   return { kind: "none", text: "尚未结算。", explosionTriggered };
 }
 
 export interface CreateTimeoutFailureRecordDepsEvent {
   getSettingsEvent: () => DicePluginSettingsEvent;
+  getDiceMetaEvent: () => DiceMetaEvent;
   normalizeCompareOperatorEvent: (raw: any) => CompareOperatorEvent | null;
   createSyntheticTimeoutDiceResultEvent: (event: DiceEventSpecEvent) => DiceResult;
-  resolveSkillModifierBySkillNameEvent: (
-    skillName: string,
-    settings?: DicePluginSettingsEvent
-  ) => number;
+  resolveSkillModifierBySkillNameEvent: (skillName: string, settings?: DicePluginSettingsEvent) => number;
   createIdEvent: (prefix: string) => string;
 }
 
@@ -340,12 +524,18 @@ export function createTimeoutFailureRecordEvent(
   deps: CreateTimeoutFailureRecordDepsEvent
 ): EventRollRecordEvent {
   const settings = deps.getSettingsEvent();
+  const meta = deps.getDiceMetaEvent();
   const compareUsed = deps.normalizeCompareOperatorEvent(event.compare) ?? ">=";
   const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
-  const result = deps.createSyntheticTimeoutDiceResultEvent(event);
-  const baseModifierUsed = Number(result.modifier) || 0;
+  let result = deps.createSyntheticTimeoutDiceResultEvent(event);
   const skillModifierApplied = deps.resolveSkillModifierBySkillNameEvent(event.skill, settings);
-  const finalModifierUsed = baseModifierUsed + skillModifierApplied;
+  const skillAdjusted = applySkillModifierToDiceResultEvent(result, skillModifierApplied);
+  result = skillAdjusted.result;
+  const statusResolved = resolveStatusModifierBySkillNameForRollEvent(event.skill, meta, settings);
+  const statusAdjusted = applyStatusModifierToDiceResultEvent(result, statusResolved.modifier);
+  result = statusAdjusted.result;
+  const grade = evaluateResultGradeEvent(result, false, compareUsed, dcUsed, "timeout_auto_fail");
+
   return {
     rollId: deps.createIdEvent("eroll"),
     roundId: round.roundId,
@@ -356,9 +546,14 @@ export function createTimeoutFailureRecordEvent(
     success: false,
     compareUsed,
     dcUsed,
+    advantageStateApplied: normalizeAdvantageStateOrNormalEvent(event.advantageState),
+    resultGrade: grade.resultGrade,
+    marginToDc: grade.marginToDc,
     skillModifierApplied,
-    baseModifierUsed,
-    finalModifierUsed,
+    statusModifierApplied: statusResolved.modifier,
+    statusModifiersApplied: statusResolved.matched,
+    baseModifierUsed: skillAdjusted.baseModifierUsed,
+    finalModifierUsed: statusAdjusted.finalModifierUsed,
     targetLabelUsed: event.targetLabel,
     rolledAt: now,
     source: "timeout_auto_fail",
@@ -368,10 +563,7 @@ export function createTimeoutFailureRecordEvent(
 
 export interface RecordTimeoutFailureIfNeededDepsEvent {
   getSettingsEvent: () => DicePluginSettingsEvent;
-  getLatestRollRecordForEvent: (
-    round: PendingRoundEvent,
-    eventId: string
-  ) => EventRollRecordEvent | null;
+  getLatestRollRecordForEvent: (round: PendingRoundEvent, eventId: string) => EventRollRecordEvent | null;
   ensureRoundEventTimersSyncedEvent: (round: PendingRoundEvent) => void;
   createTimeoutFailureRecordEvent: (
     round: PendingRoundEvent,
@@ -416,24 +608,29 @@ export interface SweepTimeoutFailuresDepsEvent {
 
 export function sweepTimeoutFailuresEvent(deps: SweepTimeoutFailuresDepsEvent): boolean {
   const settings = deps.getSettingsEvent();
-  if (!settings.enabled) return false;
-  if (!settings.enableTimeLimit) return false;
+  if (!settings.enabled || !settings.enableTimeLimit) return false;
 
   const meta = deps.getDiceMetaEvent();
   const round = meta.pendingRound;
   if (!round) return false;
+  if (round.status !== "open") return false;
 
   deps.ensureRoundEventTimersSyncedEvent(round);
   const now = Date.now();
   let changed = false;
   for (const event of round.events) {
     const created = deps.recordTimeoutFailureIfNeededEvent(round, event, now);
-    if (created) changed = true;
+    if (created) {
+      changed = true;
+      if (settings.enableDynamicResultGuidance) {
+        enqueueResultGuidanceFromRecordEvent(meta, event, created);
+      }
+      if (applyOutcomeStatusEffectsFromRecordEvent(meta, event, created, settings)) {
+        changed = true;
+      }
+    }
   }
-
-  if (changed) {
-    deps.saveMetadataSafeEvent();
-  }
+  if (changed) deps.saveMetadataSafeEvent();
   return changed;
 }
 
@@ -447,38 +644,23 @@ export interface PerformEventRollByIdDepsEvent {
     now?: number
   ) => EventRollRecordEvent | null;
   saveMetadataSafeEvent: () => void;
-  getLatestRollRecordForEvent: (
-    round: PendingRoundEvent,
-    eventId: string
-  ) => EventRollRecordEvent | null;
-  buildEventAlreadyRolledCardEvent: (
-    event: DiceEventSpecEvent,
-    record: EventRollRecordEvent
-  ) => string;
+  getLatestRollRecordForEvent: (round: PendingRoundEvent, eventId: string) => EventRollRecordEvent | null;
+  buildEventAlreadyRolledCardEvent: (event: DiceEventSpecEvent, record: EventRollRecordEvent) => string;
   pushToChat: (message: string) => string | undefined | void;
   refreshCountdownDomEvent: () => void;
   rollExpression: (exprRaw: string, options?: DiceOptions) => DiceResult;
+  parseDiceExpression: ParseDiceExpressionFnEvent;
   getSettingsEvent: () => DicePluginSettingsEvent;
-  resolveSkillModifierBySkillNameEvent: (
-    skillName: string,
-    settings?: DicePluginSettingsEvent
-  ) => number;
+  resolveSkillModifierBySkillNameEvent: (skillName: string, settings?: DicePluginSettingsEvent) => number;
   applySkillModifierToDiceResultEvent: (
     result: DiceResult,
     skillModifier: number
   ) => { result: DiceResult; baseModifierUsed: number; finalModifierUsed: number };
   saveLastRoll: (result: DiceResult) => void;
   normalizeCompareOperatorEvent: (raw: any) => CompareOperatorEvent | null;
-  evaluateSuccessEvent: (
-    total: number,
-    compare: CompareOperatorEvent,
-    dc: number | null
-  ) => boolean | null;
+  evaluateSuccessEvent: (total: number, compare: CompareOperatorEvent, dc: number | null) => boolean | null;
   createIdEvent: (prefix: string) => string;
-  buildEventRollResultCardEvent: (
-    event: DiceEventSpecEvent,
-    record: EventRollRecordEvent
-  ) => string;
+  buildEventRollResultCardEvent: (event: DiceEventSpecEvent, record: EventRollRecordEvent) => string;
 }
 
 export function performEventRollByIdEvent(
@@ -498,6 +680,9 @@ export function performEventRollByIdEvent(
   if (!round) {
     return "❌ 当前没有可投掷的事件。";
   }
+  if (round.status !== "open") {
+    return "❌ 当前轮次已结束，请等待 AI 生成新轮次事件。";
+  }
   if (expectedRoundId && round.roundId !== expectedRoundId) {
     return "❌ 该事件所属轮次已结束。";
   }
@@ -507,9 +692,14 @@ export function performEventRollByIdEvent(
     return `❌ 找不到事件 ID：${eventId}`;
   }
 
+  const settings = deps.getSettingsEvent();
   deps.ensureRoundEventTimersSyncedEvent(round);
   const timeoutCreated = deps.recordTimeoutFailureIfNeededEvent(round, event);
   if (timeoutCreated) {
+    if (settings.enableDynamicResultGuidance) {
+      enqueueResultGuidanceFromRecordEvent(meta, event, timeoutCreated);
+    }
+    applyOutcomeStatusEffectsFromRecordEvent(meta, event, timeoutCreated, settings);
     deps.saveMetadataSafeEvent();
   }
 
@@ -526,22 +716,34 @@ export function performEventRollByIdEvent(
     return `❌ 事件 ${eventId} 缺少可用骰式。`;
   }
 
-  const settings = deps.getSettingsEvent();
+  const execution = resolveRollExecutionOptionsEvent(expr, event, settings, deps.parseDiceExpression);
+  if (execution.errorText) {
+    return `❌ 掷骰失败：${execution.errorText}`;
+  }
 
   let result: DiceResult;
   try {
-    result = deps.rollExpression(expr, { rule: settings.ruleText });
+    result = deps.rollExpression(expr, {
+      rule: settings.ruleText,
+      adv: execution.adv,
+      dis: execution.dis,
+    });
   } catch (error: any) {
     return `❌ 掷骰失败：${error?.message ?? String(error)}`;
   }
+
   const skillModifierApplied = deps.resolveSkillModifierBySkillNameEvent(event.skill, settings);
   const adjusted = deps.applySkillModifierToDiceResultEvent(result, skillModifierApplied);
   result = adjusted.result;
+  const statusResolved = resolveStatusModifierBySkillNameForRollEvent(event.skill, meta, settings);
+  const statusAdjusted = applyStatusModifierToDiceResultEvent(result, statusResolved.modifier);
+  result = statusAdjusted.result;
 
   deps.saveLastRoll(result);
   const compareUsed = deps.normalizeCompareOperatorEvent(event.compare) ?? ">=";
   const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
   const success = deps.evaluateSuccessEvent(result.total, compareUsed, dcUsed);
+  const grade = evaluateResultGradeEvent(result, success, compareUsed, dcUsed, "manual_roll");
 
   const record: EventRollRecordEvent = {
     rollId: deps.createIdEvent("eroll"),
@@ -553,9 +755,14 @@ export function performEventRollByIdEvent(
     success,
     compareUsed,
     dcUsed,
+    advantageStateApplied: execution.advantageStateApplied,
+    resultGrade: grade.resultGrade,
+    marginToDc: grade.marginToDc,
     skillModifierApplied,
+    statusModifierApplied: statusResolved.modifier,
+    statusModifiersApplied: statusResolved.matched,
     baseModifierUsed: adjusted.baseModifierUsed,
-    finalModifierUsed: adjusted.finalModifierUsed,
+    finalModifierUsed: statusAdjusted.finalModifierUsed,
     targetLabelUsed: event.targetLabel,
     rolledAt: Date.now(),
     source: "manual_roll",
@@ -563,6 +770,10 @@ export function performEventRollByIdEvent(
   };
 
   round.rolls.push(record);
+  if (settings.enableDynamicResultGuidance) {
+    enqueueResultGuidanceFromRecordEvent(meta, event, record);
+  }
+  applyOutcomeStatusEffectsFromRecordEvent(meta, event, record, settings);
   deps.saveMetadataSafeEvent();
   deps.refreshCountdownDomEvent();
 
@@ -573,44 +784,30 @@ export function performEventRollByIdEvent(
 
 export interface AutoRollEventsByAiModeDepsEvent {
   getSettingsEvent: () => DicePluginSettingsEvent;
+  getDiceMetaEvent: () => DiceMetaEvent;
   ensureRoundEventTimersSyncedEvent: (round: PendingRoundEvent) => void;
-  getLatestRollRecordForEvent: (
-    round: PendingRoundEvent,
-    eventId: string
-  ) => EventRollRecordEvent | null;
+  getLatestRollRecordForEvent: (round: PendingRoundEvent, eventId: string) => EventRollRecordEvent | null;
   rollExpression: (exprRaw: string, options?: DiceOptions) => DiceResult;
-  resolveSkillModifierBySkillNameEvent: (
-    skillName: string,
-    settings?: DicePluginSettingsEvent
-  ) => number;
+  parseDiceExpression: ParseDiceExpressionFnEvent;
+  resolveSkillModifierBySkillNameEvent: (skillName: string, settings?: DicePluginSettingsEvent) => number;
   applySkillModifierToDiceResultEvent: (
     result: DiceResult,
     skillModifier: number
   ) => { result: DiceResult; baseModifierUsed: number; finalModifierUsed: number };
   normalizeCompareOperatorEvent: (raw: any) => CompareOperatorEvent | null;
-  evaluateSuccessEvent: (
-    total: number,
-    compare: CompareOperatorEvent,
-    dc: number | null
-  ) => boolean | null;
+  evaluateSuccessEvent: (total: number, compare: CompareOperatorEvent, dc: number | null) => boolean | null;
   createIdEvent: (prefix: string) => string;
-  buildEventRollResultCardEvent: (
-    event: DiceEventSpecEvent,
-    record: EventRollRecordEvent
-  ) => string;
+  buildEventRollResultCardEvent: (event: DiceEventSpecEvent, record: EventRollRecordEvent) => string;
   saveLastRoll: (result: DiceResult) => void;
   saveMetadataSafeEvent: () => void;
 }
 
-export function autoRollEventsByAiModeEvent(
-  round: PendingRoundEvent,
-  deps: AutoRollEventsByAiModeDepsEvent
-): string[] {
+export function autoRollEventsByAiModeEvent(round: PendingRoundEvent, deps: AutoRollEventsByAiModeDepsEvent): string[] {
   const settings = deps.getSettingsEvent();
   if (!settings.enableAiRollMode) return [];
 
   deps.ensureRoundEventTimersSyncedEvent(round);
-
+  const meta = deps.getDiceMetaEvent();
   let changed = false;
   let lastResult: DiceResult | null = null;
   const resultCards: string[] = [];
@@ -625,20 +822,36 @@ export function autoRollEventsByAiModeEvent(
     const expr = String(event.checkDice || "").trim();
     if (!expr) continue;
 
-    let result: DiceResult;
-    try {
-      result = deps.rollExpression(expr, { rule: settings.ruleText });
-    } catch (error) {
-      console.warn(`[骰子插件] AI 自动投骰失败: event=${event.id}`, error);
+    const execution = resolveRollExecutionOptionsEvent(expr, event, settings, deps.parseDiceExpression);
+    if (execution.errorText) {
+      console.warn(`[骰子插件] AI 自动掷骰被跳过: event=${event.id} reason=${execution.errorText}`);
       continue;
     }
+
+    let result: DiceResult;
+    try {
+      result = deps.rollExpression(expr, {
+        rule: settings.ruleText,
+        adv: execution.adv,
+        dis: execution.dis,
+      });
+    } catch (error) {
+      console.warn(`[骰子插件] AI 自动掷骰失败: event=${event.id}`, error);
+      continue;
+    }
+
     const skillModifierApplied = deps.resolveSkillModifierBySkillNameEvent(event.skill, settings);
     const adjusted = deps.applySkillModifierToDiceResultEvent(result, skillModifierApplied);
     result = adjusted.result;
+    const statusResolved = resolveStatusModifierBySkillNameForRollEvent(event.skill, meta, settings);
+    const statusAdjusted = applyStatusModifierToDiceResultEvent(result, statusResolved.modifier);
+    result = statusAdjusted.result;
 
     const compareUsed = deps.normalizeCompareOperatorEvent(event.compare) ?? ">=";
     const dcUsed = Number.isFinite(event.dc) ? Number(event.dc) : null;
     const success = deps.evaluateSuccessEvent(result.total, compareUsed, dcUsed);
+    const grade = evaluateResultGradeEvent(result, success, compareUsed, dcUsed, "ai_auto_roll");
+
     const record: EventRollRecordEvent = {
       rollId: deps.createIdEvent("eroll"),
       roundId: round.roundId,
@@ -649,9 +862,14 @@ export function autoRollEventsByAiModeEvent(
       success,
       compareUsed,
       dcUsed,
+      advantageStateApplied: execution.advantageStateApplied,
+      resultGrade: grade.resultGrade,
+      marginToDc: grade.marginToDc,
       skillModifierApplied,
+      statusModifierApplied: statusResolved.modifier,
+      statusModifiersApplied: statusResolved.matched,
       baseModifierUsed: adjusted.baseModifierUsed,
-      finalModifierUsed: adjusted.finalModifierUsed,
+      finalModifierUsed: statusAdjusted.finalModifierUsed,
       targetLabelUsed: event.targetLabel,
       rolledAt: Date.now(),
       source: "ai_auto_roll",
@@ -659,18 +877,20 @@ export function autoRollEventsByAiModeEvent(
     };
 
     round.rolls.push(record);
+    if (settings.enableDynamicResultGuidance) {
+      enqueueResultGuidanceFromRecordEvent(meta, event, record);
+    }
+    applyOutcomeStatusEffectsFromRecordEvent(meta, event, record, settings);
     changed = true;
     lastResult = result;
     resultCards.push(deps.buildEventRollResultCardEvent(event, record));
   }
 
   if (!changed) return [];
-
   if (lastResult) {
     deps.saveLastRoll(lastResult);
-  } else {
-    deps.saveMetadataSafeEvent();
   }
+  deps.saveMetadataSafeEvent();
   return resultCards;
 }
 
@@ -700,9 +920,12 @@ export function formatRollRecordSummaryEvent(
   const skillModifierApplied = Number.isFinite(Number(record.skillModifierApplied))
     ? Number(record.skillModifierApplied)
     : 0;
+  const statusModifierApplied = Number.isFinite(Number(record.statusModifierApplied))
+    ? Number(record.statusModifierApplied)
+    : 0;
   const finalModifierUsed = Number.isFinite(Number(record.finalModifierUsed))
     ? Number(record.finalModifierUsed)
-    : baseModifierUsed + skillModifierApplied;
+    : baseModifierUsed + skillModifierApplied + statusModifierApplied;
   let outcomeTag = "";
   if (settings.enableOutcomeBranches) {
     const resolved = event
@@ -727,14 +950,29 @@ export function formatRollRecordSummaryEvent(
         finalModifierUsed
       )}`
     : "";
+  const statusDetailTag =
+    statusModifierApplied !== 0
+      ? ` | 状态:${statusModifierApplied > 0 ? `+${statusModifierApplied}` : statusModifierApplied}${
+          Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
+            ? `(${record.statusModifiersApplied
+                .map((item) => `${item.name}${item.modifier > 0 ? `+${item.modifier}` : item.modifier}`)
+                .join(",")})`
+            : ""
+        }`
+      : "";
+  const advantageTag =
+    record.advantageStateApplied && record.advantageStateApplied !== ADVANTAGE_NORMAL_Event
+      ? ` | 骰态:${record.advantageStateApplied}`
+      : "";
+  const gradeTag = record.resultGrade ? ` | 分级:${record.resultGrade}` : "";
 
   if (record.source === "timeout_auto_fail") {
-    return `超时自动判定失败${targetTag}${modifierTag}${outcomeTag}`;
+    return `超时自动判定失败${targetTag}${modifierTag}${statusDetailTag}${advantageTag}${gradeTag}${outcomeTag}`;
   }
   if (record.source === "ai_auto_roll") {
     const status = record.success === null ? "未判定" : record.success ? "成功" : "失败";
-    return `AI自动检定，总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${outcomeTag}`;
+    return `AI自动检定，总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${statusDetailTag}${advantageTag}${gradeTag}${outcomeTag}`;
   }
   const status = record.success === null ? "未判定" : record.success ? "成功" : "失败";
-  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${outcomeTag}`;
+  return `总值 ${record.result.total} (${record.compareUsed} ${record.dcUsed ?? "?"} => ${status})${targetTag}${modifierTag}${statusDetailTag}${advantageTag}${gradeTag}${outcomeTag}`;
 }

@@ -15,6 +15,34 @@ function formatModifierTemplateEvent(mod: number): string {
   return mod > 0 ? `+${mod}` : `${mod}`;
 }
 
+function escapeAttrTemplateEvent(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/`/g, "&#96;");
+}
+
+function buildDiceComputationTooltipTemplateEvent(result: DiceResultTemplateEvent): string {
+  const parts: string[] = [];
+  const rollsText = Array.isArray(result.rolls) && result.rolls.length > 0 ? `[${result.rolls.join(", ")}]` : "[]";
+  const rawTotal = Number.isFinite(Number(result.rawTotal)) ? Number(result.rawTotal) : 0;
+  const modifier = Number.isFinite(Number(result.modifier)) ? Number(result.modifier) : 0;
+  const total = Number.isFinite(Number(result.total)) ? Number(result.total) : rawTotal + modifier;
+
+  parts.push(`骰面 ${rollsText}`);
+  parts.push(`原始值 ${rawTotal}`);
+  parts.push(`修正值 ${formatModifierTemplateEvent(modifier)}`);
+  parts.push(`总计 ${total}`);
+  if (result.exploding) {
+    parts.push(result.explosionTriggered ? "爆骰已触发" : "爆骰已启用");
+  }
+
+  return parts.join(" | ");
+}
+
 export function buildDiceSvgTemplateEvent(
   value: number,
   sides: number,
@@ -107,14 +135,14 @@ export function buildResultMessageTemplateEvent(
     const maxVal = result.sides;
     if (val === maxVal) {
       critType = "success";
-      critText = "大成功!";
+      critText = "大成功！";
       resultColor = rpgColors.critSuccess;
       resultGlow = "0 0 15px rgba(76, 175, 80, 0.8)";
       cardBg = "linear-gradient(135deg, #1b3320 0%, #0d1a10 100%)";
       cardBorder = rpgColors.critSuccess;
     } else if (val === 1) {
       critType = "fail";
-      critText = "大失败!";
+      critText = "大失败！";
       resultColor = rpgColors.critFail;
       resultGlow = "0 0 15px rgba(244, 67, 54, 0.8)";
       cardBg = "linear-gradient(135deg, #331b1b 0%, #1a0d0d 100%)";
@@ -123,21 +151,26 @@ export function buildResultMessageTemplateEvent(
   }
 
   const showDiceSvgs = result.rolls.length <= 5;
+  const diceTooltip = buildDiceComputationTooltipTemplateEvent(result);
   const diceVisuals = showDiceSvgs
     ? result.rolls
-        .map((r) => buildDiceSvgTemplateEvent(r, result.sides, resultColor))
+        .map((r, idx) => {
+          const diceSvg = buildDiceSvgTemplateEvent(r, result.sides, resultColor);
+          const singleDiceTooltip = `${diceTooltip} | 第${idx + 1}颗: ${r}`;
+          return `<span style="display:inline-flex;cursor:help;" title="${escapeAttrTemplateEvent(singleDiceTooltip)}">${diceSvg}</span>`;
+        })
         .join(" ")
-    : buildDiceSvgTemplateEvent(0, result.sides, resultColor);
+    : `<span style="display:inline-flex;cursor:help;" title="${escapeAttrTemplateEvent(diceTooltip)}">${buildDiceSvgTemplateEvent(0, result.sides, resultColor)}</span>`;
   const rollingVisual = buildRollingSvgTemplateEvent(rpgColors.textHighlight);
   const detailParts: string[] = [];
   if (result.rolls.length) {
-    detailParts.push(`骰子: [${rollsStr}]`);
+    detailParts.push(`骰面: [${rollsStr}]`);
   }
   if (hasModifier) {
     detailParts.push(`修正值: ${modStr}`);
   }
   if (result.exploding) {
-    detailParts.push(result.explosionTriggered ? "🔥 爆骰触发" : "🔥 爆骰待触发");
+    detailParts.push(result.explosionTriggered ? "爆骰已触发" : "爆骰已启用");
   }
   const detailText = detailParts.join(" | ");
 
@@ -282,9 +315,9 @@ export function buildResultMessageTemplateEvent(
 
         <div class="dice-result-${uniqueId}">
             ${critText ? `<div class="${critType === "success" ? `crit-success-${uniqueId}` : `crit-fail-${uniqueId}`}">${critText}</div>` : ""}
-          ${result.exploding ? `<div class="explosion-note-${uniqueId}">${result.explosionTriggered ? "🔥 连锁爆骰！" : "🔥 爆骰已开启"}</div>` : ""}
+          ${result.exploding ? `<div class="explosion-note-${uniqueId}">${result.explosionTriggered ? "连锁爆骰！" : "爆骰已开启"}</div>` : ""}
             
-            <div style="margin-bottom: 12px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+            <div style="margin-bottom: 12px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;" title="${escapeAttrTemplateEvent(diceTooltip)}">
                 ${diceVisuals}
             </div>
 

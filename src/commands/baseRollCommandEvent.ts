@@ -65,11 +65,11 @@ export function registerBaseMacrosAndCommandsEvent(
     SlashCommand.fromProps({
       name: "roll",
       aliases: ["dice"],
-      returns: "通用骰子：支持 NdM+X，如 3d6+2、1d20",
+      returns: "通用骰子：支持 NdM+X，例如 3d6+2、1d20",
       namedArgumentList: [],
       unnamedArgumentList: [
         SlashCommandArgument.fromProps({
-          description: "骰子表达式（例如 1d20、3d6+2）。留空则等于 1d20。",
+          description: "骰子表达式（如 1d20、3d6+2）。留空等于 1d20。",
           typeList: ARGUMENT_TYPE.STRING,
           isRequired: false,
         }),
@@ -85,7 +85,7 @@ export function registerBaseMacrosAndCommandsEvent(
           const fallback = pushToChat(msg);
           return fallback ?? "";
         } catch (e: any) {
-          const errMsg = `❌ 掷骰出错：${e?.message ?? String(e)}`;
+          const errMsg = `掷骰出错：${e?.message ?? String(e)}`;
           const fallback = pushToChat(errMsg);
           return fallback ?? "";
         }
