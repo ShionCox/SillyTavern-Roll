@@ -149,6 +149,7 @@ import {
   bindMountedSettingsCardEvent as bindMountedSettingsCardModuleEvent,
   buildSettingsCardTemplateIdsEvent as buildSettingsCardTemplateIdsModuleEvent,
   copyTextToClipboardEvent as copyTextToClipboardModuleEvent,
+  createSkillDraftAccessorEvent as createSkillDraftAccessorModuleEvent,
   ensureSettingsCardStylesEvent as ensureSettingsCardStylesModuleEvent,
   isElementVisibleEvent as isElementVisibleModuleEvent,
   mountSettingsCardShellEvent as mountSettingsCardShellModuleEvent,
@@ -366,6 +367,14 @@ const renderSkillValidationErrorsEvent = skillEditorRuntimeEvent.renderSkillVali
 const hydrateSkillDraftFromSettingsEvent = skillEditorRuntimeEvent.hydrateSkillDraftFromSettingsEvent;
 const confirmDiscardSkillDraftEvent = skillEditorRuntimeEvent.confirmDiscardSkillDraftEvent;
 
+// 此访问器是技能草稿状态唯一入口。
+const skillDraftAccessorEvent = createSkillDraftAccessorModuleEvent({
+  getRowsEvent: skillEditorRuntimeEvent.getSkillRowsDraftEvent,
+  setRowsEvent: skillEditorRuntimeEvent.setSkillRowsDraftEvent,
+  getSnapshotEvent: skillEditorRuntimeEvent.getSkillEditorLastSavedSnapshotEvent,
+  setSnapshotEvent: skillEditorRuntimeEvent.setSkillEditorLastSavedSnapshotEvent,
+});
+
 function bindSettingsCardMountedActionsEvent(
   drawerToggleId: string,
   drawerContentId: string
@@ -406,8 +415,8 @@ function bindSettingsCardMountedActionsEvent(
     },
     skillRowsEditingActionsDepsEvent: {
       ...SETTINGS_SKILL_ROWS_EDIT_IDS_Event,
-      getSkillRowsDraftEvent: skillEditorRuntimeEvent.getSkillRowsDraftEvent,
-      setSkillRowsDraftEvent: skillEditorRuntimeEvent.setSkillRowsDraftEvent,
+      // 此访问器是技能草稿状态唯一入口。
+      skillDraftAccessorEvent,
       createSkillEditorRowDraftEvent: createSkillEditorRowDraftStoreEvent,
       renderSkillRowsEvent,
       refreshSkillDraftDirtyStateEvent,
@@ -415,8 +424,8 @@ function bindSettingsCardMountedActionsEvent(
     },
     skillImportExportActionsDepsEvent: {
       ...SETTINGS_SKILL_IMPORT_EXPORT_IDS_Event,
-      getSkillRowsDraftEvent: skillEditorRuntimeEvent.getSkillRowsDraftEvent,
-      setSkillRowsDraftEvent: skillEditorRuntimeEvent.setSkillRowsDraftEvent,
+      // 此访问器是技能草稿状态唯一入口。
+      skillDraftAccessorEvent,
       serializeSkillRowsToSkillTableTextEvent: serializeSkillRowsToSkillTableTextStoreEvent,
       getSettingsEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
@@ -429,7 +438,6 @@ function bindSettingsCardMountedActionsEvent(
       renderSkillValidationErrorsEvent,
       copyTextToClipboardEvent,
       pushToChat,
-      setSkillEditorLastSavedSnapshotEvent: skillEditorRuntimeEvent.setSkillEditorLastSavedSnapshotEvent,
       buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
       setSkillDraftDirtyEvent: skillEditorRuntimeEvent.setSkillDraftDirtyEvent,
       saveSkillPresetStoreEvent: saveSkillPresetStoreStoreEvent,
