@@ -109,6 +109,17 @@ export function buildSettingsCardHtmlTemplateEvent(
             </div>
           </label>
 
+
+          <div class="st-roll-item st-roll-search-item" data-st-roll-search="dice sides whitelist ai format 1d20 1d100">
+            <div class="st-roll-item-main">
+              <div class="st-roll-item-title">限制 AI 可用骰子面数</div>
+              <div class="st-roll-item-desc">填写允许的面数，逗号分隔（如 6,20,100）。留空表示不限制。</div>
+            </div>
+            <div class="st-roll-row">
+              <input id="${ids.allowedDiceSidesId}" class="st-roll-input" type="text" placeholder="例如：4,6,8,10,12,20,100" />
+            </div>
+          </div>
+
           <div class="st-roll-divider">
             <i class="fa-solid fa-route"></i>
             <span>剧情分支</span>

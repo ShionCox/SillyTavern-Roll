@@ -9,6 +9,7 @@ export const SETTINGS_ENABLED_ID_Event = "st-roll-settings-Event-enabled";
 export const SETTINGS_RULE_ID_Event = "st-roll-settings-Event-auto-rule";
 export const SETTINGS_AI_ROLL_MODE_ID_Event = "st-roll-settings-Event-ai-roll-mode";
 export const SETTINGS_EXPLODING_ENABLED_ID_Event = "st-roll-settings-Event-exploding-enabled";
+export const SETTINGS_ALLOWED_DICE_SIDES_ID_Event = "st-roll-settings-Event-allowed-dice-sides";
 export const SETTINGS_SUMMARY_DETAIL_ID_Event = "st-roll-settings-Event-summary-detail";
 export const SETTINGS_SUMMARY_ROUNDS_ID_Event = "st-roll-settings-Event-summary-rounds";
 export const SETTINGS_SCOPE_ID_Event = "st-roll-settings-Event-apply-scope";
@@ -99,6 +100,7 @@ export const SETTINGS_TEMPLATE_STATIC_DEPS_Event = {
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
   SETTINGS_SCOPE_ID_Event,
@@ -156,6 +158,7 @@ export const SETTINGS_BASIC_INPUT_IDS_Event = {
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
   SETTINGS_SCOPE_ID_Event,
@@ -197,6 +200,7 @@ export const SETTINGS_SYNC_UI_IDS_Event = {
   SETTINGS_RULE_ID_Event,
   SETTINGS_AI_ROLL_MODE_ID_Event,
   SETTINGS_EXPLODING_ENABLED_ID_Event,
+  SETTINGS_ALLOWED_DICE_SIDES_ID_Event,
   SETTINGS_SUMMARY_DETAIL_ID_Event,
   SETTINGS_SUMMARY_ROUNDS_ID_Event,
   SETTINGS_SCOPE_ID_Event,
@@ -276,6 +280,7 @@ export const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   autoSendRuleToAI: true,
   enableAiRollMode: true,
   enableExplodingDice: true,
+  aiAllowedDiceSidesText: "4,6,8,10,12,20,100",
   summaryDetailMode: "minimal",
   summaryHistoryRounds: 3,
   eventApplyScope: "protagonist_only",

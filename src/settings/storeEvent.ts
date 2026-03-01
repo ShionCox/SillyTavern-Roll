@@ -122,6 +122,10 @@ export function getSettingsEvent(): DicePluginSettingsEvent {
   bucket.autoSendRuleToAI = bucket.autoSendRuleToAI !== false;
   bucket.enableAiRollMode = bucket.enableAiRollMode !== false;
   bucket.enableExplodingDice = bucket.enableExplodingDice !== false;
+  bucket.aiAllowedDiceSidesText =
+    typeof (bucket as any).aiAllowedDiceSidesText === "string"
+      ? String((bucket as any).aiAllowedDiceSidesText).trim()
+      : DEFAULT_SETTINGS_Event.aiAllowedDiceSidesText;
   bucket.enableOutcomeBranches = bucket.enableOutcomeBranches !== false;
   bucket.enableExplodeOutcomeBranch = bucket.enableExplodeOutcomeBranch !== false;
   bucket.includeOutcomeInSummary = bucket.includeOutcomeInSummary !== false;

@@ -230,6 +230,31 @@ export interface NormalizeEventSpecDepsEvent {
   ISO_8601_DURATION_REGEX_Event: RegExp;
 }
 
+export function parseAllowedDiceSidesSetEvent(raw: string): Set<number> | null {
+  const text = normalizeStringFieldEvent(raw);
+  if (!text) return null;
+  const parts = text
+    .split(/[，,\s]+/)
+    .map((item) => Number(item.trim()))
+    .filter((value) => Number.isFinite(value) && value > 0 && Number.isInteger(value));
+  if (parts.length === 0) return null;
+  return new Set(parts);
+}
+
+export function isDiceExpressionAllowedBySettingsEvent(
+  checkDice: string,
+  settings: DicePluginSettingsEvent
+): boolean {
+  const allowedSidesSet = parseAllowedDiceSidesSetEvent(settings.aiAllowedDiceSidesText);
+  if (!allowedSidesSet || allowedSidesSet.size === 0) return true;
+  try {
+    const parsed = parseDiceExpression(checkDice);
+    return allowedSidesSet.has(parsed.sides);
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeEventSpecEvent(
   raw: any,
   deps: NormalizeEventSpecDepsEvent
@@ -272,6 +297,14 @@ export function normalizeEventSpecEvent(
   try {
     parseDiceExpression(checkDice);
   } catch {
+    return null;
+  }
+
+  if (!isDiceExpressionAllowedBySettingsEvent(checkDice, settings)) {
+    const allowedText = normalizeStringFieldEvent(settings.aiAllowedDiceSidesText);
+    console.warn(
+      `[骰子插件] 事件骰式不在允许面数列表中，已忽略: event=${id} checkDice=${checkDice} allowed=${allowedText || "(未配置)"}`
+    );
     return null;
   }
 

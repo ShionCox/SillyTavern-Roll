@@ -114,6 +114,18 @@ export interface DiceRuleBlockDepsEvent {
   DICE_RULE_BLOCK_END_Event: string;
 }
 
+function parseAllowedDiceSidesForRuleEvent(raw: string): number[] {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  const unique = new Set<number>();
+  for (const part of text.split(/[，,\s]+/)) {
+    const value = Number(String(part || "").trim());
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) continue;
+    unique.add(value);
+  }
+  return Array.from(unique).sort((a, b) => a - b);
+}
+
 export function buildDiceRuleBlockCompactEvent(deps: DiceRuleBlockDepsEvent): string {
   const settings = deps.getSettingsEvent();
   const rawRuleText =
@@ -131,8 +143,14 @@ export function buildDiceRuleBlockCompactEvent(deps: DiceRuleBlockDepsEvent): st
     skillRuleSection = `\n[SKILL_SYSTEM]\nenabled=true\npreset_id=${activePreset.id}\npreset_name=${presetNameLine}\nskill_table=${skillTableJson}\n说明：event.skill 会匹配 skill_table 的 key（trim + lowercase），命中后作为技能修正加到检定总值。\n[/SKILL_SYSTEM]`;
   }
 
+  const allowedDiceSides = parseAllowedDiceSidesForRuleEvent(settings.aiAllowedDiceSidesText);
+  const allowedDiceSidesRuleSection =
+    allowedDiceSides.length > 0
+      ? `\n[DICE_ALLOWED_SIDES]\nenabled=true\nallowed_sides=${allowedDiceSides.join(",")}\n要求：生成事件时，checkDice 只能使用上述面数（如 1d20、2d6+3、1d100!）。\n若不在列表内，事件会被系统忽略。\n[/DICE_ALLOWED_SIDES]`
+      : "";
+
   return `${deps.DICE_RULE_BLOCK_START_Event}
-${ruleText}${skillRuleSection}
+${ruleText}${skillRuleSection}${allowedDiceSidesRuleSection}
 ${deps.DICE_RULE_BLOCK_END_Event}`;
 }
 
