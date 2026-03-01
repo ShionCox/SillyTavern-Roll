@@ -287,6 +287,7 @@ export interface BuildEventListCardDepsEvent {
     skillModifier: number,
     finalModifier: number
   ) => string;
+  formatModifier: (mod: number) => string;
   buildEventRollButtonTemplateEvent: (params: {
     roundIdAttr: string;
     eventIdAttr: string;
@@ -300,6 +301,7 @@ export interface BuildEventListCardDepsEvent {
     descHtml: string;
     targetHtml: string;
     skillHtml: string;
+    skillTitleAttr: string;
     modifierTextHtml: string;
     checkDiceHtml: string;
     compareHtml: string;
@@ -372,6 +374,9 @@ export function buildEventListCardEvent(
             finalModifierUsed
           )
         : "";
+      const skillHoverText = settings.enableSkillSystem
+        ? `技能修正：${deps.formatModifier(skillModifierApplied)}${modifierText ? `（${modifierText}）` : ""}`
+        : "技能系统已关闭";
 
       const rollButtonHtml = showRollButton
         ? deps.buildEventRollButtonTemplateEvent({
@@ -389,6 +394,7 @@ export function buildEventListCardEvent(
         descHtml: deps.escapeHtmlEvent(event.desc),
         targetHtml: deps.escapeHtmlEvent(event.targetLabel),
         skillHtml: deps.escapeHtmlEvent(event.skill),
+        skillTitleAttr: deps.escapeAttrEvent(skillHoverText),
         modifierTextHtml: deps.escapeHtmlEvent(modifierText),
         checkDiceHtml: deps.escapeHtmlEvent(event.checkDice),
         compareHtml: deps.escapeHtmlEvent(compare),
@@ -492,7 +498,9 @@ export interface BuildEventRollResultCardDepsEvent {
     sourceHtml: string;
     targetHtml: string;
     skillHtml: string;
+    skillTitleAttr: string;
     diceExprHtml: string;
+    diceModifierHintHtml: string;
     rollsSummaryHtml: string;
     modifierBreakdownHtml: string;
     compareHtml: string;
@@ -506,6 +514,7 @@ export interface BuildEventRollResultCardDepsEvent {
     outcomeTextHtml: string;
   }) => string;
   escapeHtmlEvent: (input: string) => string;
+  escapeAttrEvent: (input: string) => string;
   getDiceSvg: (value: number, sides: number, color: string, size?: number) => string;
   getRollingSvg: (color: string, size?: number) => string;
   buildAlreadyRolledDiceVisualTemplateEvent: (params: {
@@ -562,6 +571,13 @@ export function buildEventRollResultCardEvent(
   const modifierBreakdownHtml = settings.enableSkillSystem
     ? deps.formatEventModifierBreakdownEvent(baseModifierUsed, skillModifierApplied, finalModifierUsed)
     : "";
+  const skillHoverText = settings.enableSkillSystem
+    ? `技能修正：${deps.formatModifier(skillModifierApplied)}${modifierBreakdownHtml ? `（${modifierBreakdownHtml}）` : ""}`
+    : "技能系统已关闭";
+  const diceModifierHint =
+    settings.enableSkillSystem && skillModifierApplied !== 0
+      ? `技能${deps.formatModifier(skillModifierApplied)}`
+      : "";
 
   return deps.buildEventRollResultCardTemplateEvent({
     rollIdHtml: deps.escapeHtmlEvent(record.rollId),
@@ -570,7 +586,9 @@ export function buildEventRollResultCardEvent(
     sourceHtml: deps.escapeHtmlEvent(sourceText),
     targetHtml: deps.escapeHtmlEvent(record.targetLabelUsed || event.targetLabel),
     skillHtml: deps.escapeHtmlEvent(event.skill),
+    skillTitleAttr: deps.escapeAttrEvent(skillHoverText),
     diceExprHtml: deps.escapeHtmlEvent(record.diceExpr),
+    diceModifierHintHtml: deps.escapeHtmlEvent(diceModifierHint),
     rollsSummaryHtml: deps.buildRollsSummaryTemplateEvent(
       deps.escapeHtmlEvent(record.result.rolls.join(", ")),
       deps.escapeHtmlEvent(deps.formatModifier(record.result.modifier))

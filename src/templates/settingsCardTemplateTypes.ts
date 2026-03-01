@@ -22,6 +22,7 @@ export interface SettingsCardTemplateIdsEvent {
   ruleId: string;
   aiRollModeId: string;
   explodingEnabledId: string;
+  allowedDiceSidesId: string;
   summaryDetailId: string;
   summaryRoundsId: string;
   scopeId: string;
