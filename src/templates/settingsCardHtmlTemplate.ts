@@ -235,8 +235,8 @@ export function buildSettingsCardHtmlTemplateEvent(
 
           <div class="st-roll-item st-roll-search-item" data-st-roll-search="skill full screen modal editor">
             <div class="st-roll-item-main">
-              <div class="st-roll-item-title">全屏技能编辑器</div>
-              <div class="st-roll-item-desc">点击打开全屏弹窗进行预设和技能编辑，避免设置页内容被遮挡。</div>
+              <div class="st-roll-item-title">技能编辑器</div>
+              <div class="st-roll-item-desc">点击打开进行预设和技能编辑。</div>
             </div>
             <div class="st-roll-actions">
               <button id="${ids.skillEditorOpenId}" type="button" class="st-roll-btn">打开编辑器</button>
