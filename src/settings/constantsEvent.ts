@@ -252,7 +252,7 @@ export const DEFAULT_RULE_TEXT_Event = `你必须严格遵循以下骰子事件�
 3. events[i] 必填字段：
 - id: string
 - title: string
-- checkDice: string（如 "1d100"、"1d20+3"、"1d6!"）
+- checkDice: string（如 "1d20"、"2d6+3"、"1d12!"）
 - dc: number
 - skill: string（用于匹配技能系统中的技能表 key）
 - desc: string
@@ -269,12 +269,13 @@ export const DEFAULT_RULE_TEXT_Event = `你必须严格遵循以下骰子事件�
 - outcomes.explode: 爆骰走向（优先于 success/failure）
 6. 兼容字段 successOutcome / failureOutcome / explodeOutcome 也可识别，但推荐 outcomes 对象。
 7. 字段类型必须正确，尤其 checkDice 必须是字符串。
-8. 正确示例：
+8. 当存在 [DICE_ALLOWED_SIDES] 规则时，checkDice 的面数必须取自 allowed_sides，禁止使用列表外面数。
+9. 正确示例：
 \`\`\`rolljson
-{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d100!","dc":60,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","target":{"type":"supporting","name":"穗秋生"},"outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
+{"type":"dice_events","version":"1","events":[{"id":"observation_check","title":"察觉神情","checkDice":"1d20+2","dc":15,"skill":"察觉","desc":"穗秋生试图判断你眼神中的情绪。","scope":"character","compare":">=","target":{"type":"supporting","name":"穗秋生"},"outcomes":{"success":"你成功捕捉到她语气里的迟疑。","failure":"你没读懂她的真实意图。","explode":"你突然意识到她在故意误导你。"}}]}
 \`\`\`
-9. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
-10. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为，请据此保持剧情一致。`;
+10. 非事件叙事文本正常输出；事件信息只能放在 rolljson 代码块内。
+11. DICE_ROUND_SUMMARY 是历史事件摘要，会影响后续行为，请据此保持剧情一致。`;
 export const DEFAULT_SETTINGS_Event: DicePluginSettingsEvent = {
   enabled: true,
   autoSendRuleToAI: true,

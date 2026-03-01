@@ -144,13 +144,25 @@ export function buildDiceRuleBlockCompactEvent(deps: DiceRuleBlockDepsEvent): st
   }
 
   const allowedDiceSides = parseAllowedDiceSidesForRuleEvent(settings.aiAllowedDiceSidesText);
+  const allowedDiceExamples =
+    allowedDiceSides.length > 0
+      ? allowedDiceSides.slice(0, 3).map((sides) => `1d${sides}`).join(" / ")
+      : "1d20 / 2d6+2";
+  const disallowedDiceHint =
+    allowedDiceSides.length > 0
+      ? `例如 1d100（若 100 不在 allowed_sides）属于禁止格式。`
+      : "";
+  const allowedDiceSidesHardConstraint =
+    allowedDiceSides.length > 0
+      ? `【硬性约束】本轮允许的 checkDice 面数仅为：${allowedDiceSides.join(",")}。\n仅可使用示例：${allowedDiceExamples}。\n${disallowedDiceHint}\n若你输出其他面数，系统会自动修正或拒绝该事件。\n`
+      : "";
   const allowedDiceSidesRuleSection =
     allowedDiceSides.length > 0
-      ? `\n[DICE_ALLOWED_SIDES]\nenabled=true\nallowed_sides=${allowedDiceSides.join(",")}\n要求：生成事件时，checkDice 只能使用上述面数（如 1d20、2d6+3、1d100!）。\n若不在列表内，事件会被系统忽略。\n[/DICE_ALLOWED_SIDES]`
+      ? `\n[DICE_ALLOWED_SIDES]\nenabled=true\nallowed_sides=${allowedDiceSides.join(",")}\nallowed_examples=${allowedDiceExamples}\nforbidden_hint=${disallowedDiceHint || "none"}\n要求：生成事件时，checkDice 只能使用上述面数。\n若不在列表内，事件会被系统自动修正，必要时拒绝。\n[/DICE_ALLOWED_SIDES]`
       : "";
 
   return `${deps.DICE_RULE_BLOCK_START_Event}
-${ruleText}${skillRuleSection}${allowedDiceSidesRuleSection}
+${allowedDiceSidesHardConstraint}${ruleText}${skillRuleSection}${allowedDiceSidesRuleSection}
 ${deps.DICE_RULE_BLOCK_END_Event}`;
 }
 

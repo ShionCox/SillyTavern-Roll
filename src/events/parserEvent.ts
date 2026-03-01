@@ -255,6 +255,37 @@ export function isDiceExpressionAllowedBySettingsEvent(
   }
 }
 
+
+export function normalizeDiceExpressionByAllowedSidesEvent(
+  checkDice: string,
+  settings: DicePluginSettingsEvent
+): { nextExpr: string; changed: boolean; allowedSidesText: string } {
+  const allowedSidesSet = parseAllowedDiceSidesSetEvent(settings.aiAllowedDiceSidesText);
+  const allowedSides = allowedSidesSet ? Array.from(allowedSidesSet).sort((a, b) => a - b) : [];
+  if (allowedSides.length === 0) {
+    return { nextExpr: checkDice, changed: false, allowedSidesText: "" };
+  }
+
+  const parsed = parseDiceExpression(checkDice);
+  if (allowedSidesSet!.has(parsed.sides)) {
+    return {
+      nextExpr: checkDice,
+      changed: false,
+      allowedSidesText: allowedSides.join(","),
+    };
+  }
+
+  const nextSides = allowedSides[0];
+  const modifierText = parsed.modifier === 0 ? "" : parsed.modifier > 0 ? `+${parsed.modifier}` : String(parsed.modifier);
+  const nextExpr = `${parsed.count}d${nextSides}${parsed.explode ? "!" : ""}${modifierText}`;
+
+  return {
+    nextExpr,
+    changed: true,
+    allowedSidesText: allowedSides.join(","),
+  };
+}
+
 export function normalizeEventSpecEvent(
   raw: any,
   deps: NormalizeEventSpecDepsEvent
@@ -263,7 +294,7 @@ export function normalizeEventSpecEvent(
 
   const id = normalizeStringFieldEvent(raw.id);
   const title = normalizeStringFieldEvent(raw.title);
-  const checkDice = normalizeStringFieldEvent(raw.checkDice);
+  let checkDice = normalizeStringFieldEvent(raw.checkDice);
   const skill = normalizeStringFieldEvent(raw.skill);
   const timeLimitRaw = normalizeStringFieldEvent(raw.timeLimit);
   const desc = normalizeStringFieldEvent(raw.desc);
@@ -301,11 +332,19 @@ export function normalizeEventSpecEvent(
   }
 
   if (!isDiceExpressionAllowedBySettingsEvent(checkDice, settings)) {
-    const allowedText = normalizeStringFieldEvent(settings.aiAllowedDiceSidesText);
-    console.warn(
-      `[骰子插件] 事件骰式不在允许面数列表中，已忽略: event=${id} checkDice=${checkDice} allowed=${allowedText || "(未配置)"}`
-    );
-    return null;
+    const normalized = normalizeDiceExpressionByAllowedSidesEvent(checkDice, settings);
+    if (normalized.changed) {
+      console.warn(
+        `[骰子插件] 事件骰式不在允许面数列表中，已自动修正: event=${id} from=${checkDice} to=${normalized.nextExpr} allowed=${normalized.allowedSidesText || "(未配置)"}`
+      );
+      checkDice = normalized.nextExpr;
+    } else {
+      const allowedText = normalizeStringFieldEvent(settings.aiAllowedDiceSidesText);
+      console.warn(
+        `[骰子插件] 事件骰式不在允许面数列表中，已忽略: event=${id} checkDice=${checkDice} allowed=${allowedText || "(未配置)"}`
+      );
+      return null;
+    }
   }
 
   return {
