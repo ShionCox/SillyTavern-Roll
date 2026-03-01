@@ -148,18 +148,14 @@ import {
 import {
   bindMountedSettingsCardEvent as bindMountedSettingsCardModuleEvent,
   buildSettingsCardTemplateIdsEvent as buildSettingsCardTemplateIdsModuleEvent,
-  confirmDiscardSkillDraftEvent as confirmDiscardSkillDraftModuleEvent,
   copyTextToClipboardEvent as copyTextToClipboardModuleEvent,
   ensureSettingsCardStylesEvent as ensureSettingsCardStylesModuleEvent,
   isElementVisibleEvent as isElementVisibleModuleEvent,
   mountSettingsCardShellEvent as mountSettingsCardShellModuleEvent,
-  renderSkillPresetListEvent as renderSkillPresetListModuleEvent,
-  renderSkillPresetMetaEvent as renderSkillPresetMetaModuleEvent,
-  renderSkillRowsEvent as renderSkillRowsModuleEvent,
-  renderSkillValidationErrorsEvent as renderSkillValidationErrorsModuleEvent,
   syncSettingsUiEvent as syncSettingsUiModuleEvent,
   syncSettingsBadgeVersionEvent as syncSettingsBadgeVersionModuleEvent,
 } from "../settings/uiEvent";
+import { createSkillEditorRuntimeEvent } from "../settings/skillEditorRuntimeEvent";
 import {
   buildEventAlreadyRolledCardEvent as buildEventAlreadyRolledCardModuleEvent,
   buildEventListCardEvent as buildEventListCardModuleEvent,
@@ -198,7 +194,6 @@ import type {
   EventTargetTypeEvent,
   PendingRoundEvent,
   RoundSummarySnapshotEvent,
-  SkillEditorRowDraftEvent,
   SummaryDetailModeEvent,
   TavernMessageEvent,
 } from "../types/eventDomainEvent";
@@ -285,14 +280,6 @@ export function registerBaseMacrosAndCommandsEvent(): void {
 
 // ===== Event: 事件驱动骰子系统 =====
 
-let SKILL_EDITOR_ROWS_DRAFT_Event: SkillEditorRowDraftEvent[] = [];
-let SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = "[]";
-let SKILL_EDITOR_LAST_SETTINGS_TEXT_Event = "";
-let SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event = "";
-let SKILL_EDITOR_ACTIVE_PRESET_ID_Event = "";
-let SKILL_EDITOR_DIRTY_Event = false;
-let SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = "";
-
 function getLiveContextEvent(): STContext | null {
   return getLiveContextCoreEvent();
 }
@@ -337,6 +324,28 @@ function updateSettingsEvent(patch: Partial<DicePluginSettingsEvent>): void {
   updateSettingsStoreEvent(patch);
 }
 
+
+const skillEditorRuntimeEvent = createSkillEditorRuntimeEvent({
+  SETTINGS_SKILL_DIRTY_HINT_ID_Event,
+  SETTINGS_SKILL_ERRORS_ID_Event,
+  SETTINGS_SKILL_ROWS_ID_Event,
+  SETTINGS_SKILL_PRESET_LIST_ID_Event,
+  SETTINGS_SKILL_PRESET_META_ID_Event,
+  SETTINGS_SKILL_PRESET_NAME_ID_Event,
+  SETTINGS_SKILL_PRESET_DELETE_ID_Event,
+  getSettingsEvent,
+  getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
+  getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
+  normalizeSkillTableTextForSettingsEvent,
+  deserializeSkillTableTextToRowsEvent: deserializeSkillTableTextToRowsStoreEvent,
+  buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
+  countSkillEntriesFromSkillTableTextEvent: countSkillEntriesFromSkillTableTextStoreEvent,
+  pushToChatEvent: pushToChat,
+  escapeHtmlEvent,
+  escapeAttrEvent,
+});
+
+
 function buildSettingsCardTemplateIdsForMountEvent(
   drawerToggleId: string,
   drawerContentId: string,
@@ -349,6 +358,13 @@ function buildSettingsCardTemplateIdsForMountEvent(
     drawerIconId,
   });
 }
+
+const isSkillDraftDirtyEvent = skillEditorRuntimeEvent.isSkillDraftDirtyEvent;
+const refreshSkillDraftDirtyStateEvent = skillEditorRuntimeEvent.refreshSkillDraftDirtyStateEvent;
+const renderSkillRowsEvent = skillEditorRuntimeEvent.renderSkillRowsEvent;
+const renderSkillValidationErrorsEvent = skillEditorRuntimeEvent.renderSkillValidationErrorsEvent;
+const hydrateSkillDraftFromSettingsEvent = skillEditorRuntimeEvent.hydrateSkillDraftFromSettingsEvent;
+const confirmDiscardSkillDraftEvent = skillEditorRuntimeEvent.confirmDiscardSkillDraftEvent;
 
 function bindSettingsCardMountedActionsEvent(
   drawerToggleId: string,
@@ -374,7 +390,7 @@ function bindSettingsCardMountedActionsEvent(
       ...SETTINGS_SKILL_PRESET_ACTION_IDS_Event,
       SKILL_PRESET_NEW_NAME_BASE_Event,
       SKILL_PRESET_DEFAULT_ID_Event,
-      getSkillEditorActivePresetIdEvent: () => SKILL_EDITOR_ACTIVE_PRESET_ID_Event,
+      getSkillEditorActivePresetIdEvent: skillEditorRuntimeEvent.getSkillEditorActivePresetIdEvent,
       confirmDiscardSkillDraftEvent,
       getSettingsEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
@@ -390,10 +406,8 @@ function bindSettingsCardMountedActionsEvent(
     },
     skillRowsEditingActionsDepsEvent: {
       ...SETTINGS_SKILL_ROWS_EDIT_IDS_Event,
-      getSkillRowsDraftEvent: () => SKILL_EDITOR_ROWS_DRAFT_Event,
-      setSkillRowsDraftEvent: (rows) => {
-        SKILL_EDITOR_ROWS_DRAFT_Event = rows;
-      },
+      getSkillRowsDraftEvent: skillEditorRuntimeEvent.getSkillRowsDraftEvent,
+      setSkillRowsDraftEvent: skillEditorRuntimeEvent.setSkillRowsDraftEvent,
       createSkillEditorRowDraftEvent: createSkillEditorRowDraftStoreEvent,
       renderSkillRowsEvent,
       refreshSkillDraftDirtyStateEvent,
@@ -401,27 +415,23 @@ function bindSettingsCardMountedActionsEvent(
     },
     skillImportExportActionsDepsEvent: {
       ...SETTINGS_SKILL_IMPORT_EXPORT_IDS_Event,
-      getSkillRowsDraftEvent: () => SKILL_EDITOR_ROWS_DRAFT_Event,
-      setSkillRowsDraftEvent: (rows) => {
-        SKILL_EDITOR_ROWS_DRAFT_Event = rows;
-      },
+      getSkillRowsDraftEvent: skillEditorRuntimeEvent.getSkillRowsDraftEvent,
+      setSkillRowsDraftEvent: skillEditorRuntimeEvent.setSkillRowsDraftEvent,
       serializeSkillRowsToSkillTableTextEvent: serializeSkillRowsToSkillTableTextStoreEvent,
       getSettingsEvent,
       getSkillPresetStoreEvent: getSkillPresetStoreStoreEvent,
       getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
       normalizeSkillTableTextForSettingsEvent,
-      deserializeSkillTableTextToRowsEvent,
+      deserializeSkillTableTextToRowsEvent: deserializeSkillTableTextToRowsStoreEvent,
       validateSkillRowsEvent: validateSkillRowsStoreEvent,
       renderSkillRowsEvent,
       refreshSkillDraftDirtyStateEvent,
       renderSkillValidationErrorsEvent,
       copyTextToClipboardEvent,
       pushToChat,
-      setSkillEditorLastSavedSnapshotEvent: (snapshot) => {
-        SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = snapshot;
-      },
-      buildSkillDraftSnapshotEvent,
-      setSkillDraftDirtyEvent,
+      setSkillEditorLastSavedSnapshotEvent: skillEditorRuntimeEvent.setSkillEditorLastSavedSnapshotEvent,
+      buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
+      setSkillDraftDirtyEvent: skillEditorRuntimeEvent.setSkillDraftDirtyEvent,
       saveSkillPresetStoreEvent: saveSkillPresetStoreStoreEvent,
     },
     ruleTextActionsDepsEvent: {
@@ -467,103 +477,14 @@ function syncSettingsUiEvent(): void {
     isSkillDraftDirtyEvent,
     hydrateSkillDraftFromSettingsEvent,
     DEFAULT_RULE_TEXT_Event,
-    getSkillEditorLastSettingsTextEvent: () => SKILL_EDITOR_LAST_SETTINGS_TEXT_Event,
-    getSkillEditorLastPresetStoreTextEvent: () => SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event,
+    getSkillEditorLastSettingsTextEvent: skillEditorRuntimeEvent.getSkillEditorLastSettingsTextEvent,
+    getSkillEditorLastPresetStoreTextEvent: skillEditorRuntimeEvent.getSkillEditorLastPresetStoreTextEvent,
   });
 }
 
 setSyncSettingsUiCallbackStoreEvent(() => {
   syncSettingsUiEvent();
 });
-
-function buildSkillDraftSnapshotEvent(rows: SkillEditorRowDraftEvent[]): string {
-  return buildSkillDraftSnapshotStoreEvent(rows);
-}
-
-function setSkillDraftDirtyEvent(flag: boolean): void {
-  SKILL_EDITOR_DIRTY_Event = Boolean(flag);
-  const dirtyHint = document.getElementById(SETTINGS_SKILL_DIRTY_HINT_ID_Event) as HTMLElement | null;
-  if (dirtyHint) {
-    dirtyHint.hidden = !SKILL_EDITOR_DIRTY_Event;
-  }
-}
-
-function isSkillDraftDirtyEvent(): boolean {
-  return SKILL_EDITOR_DIRTY_Event;
-}
-
-function refreshSkillDraftDirtyStateEvent(): void {
-  const snapshot = buildSkillDraftSnapshotEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
-  setSkillDraftDirtyEvent(snapshot !== SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event);
-}
-
-function renderSkillValidationErrorsEvent(errors: string[]): void {
-  renderSkillValidationErrorsModuleEvent(errors, {
-    SETTINGS_SKILL_ERRORS_ID_Event,
-    escapeHtmlEvent,
-  });
-}
-
-function deserializeSkillTableTextToRowsEvent(skillTableText: string): SkillEditorRowDraftEvent[] {
-  return deserializeSkillTableTextToRowsStoreEvent(skillTableText);
-}
-
-function renderSkillRowsEvent(): void {
-  renderSkillRowsModuleEvent(SKILL_EDITOR_ROWS_DRAFT_Event, {
-    SETTINGS_SKILL_ROWS_ID_Event,
-    escapeAttrEvent,
-  });
-}
-
-function hydrateSkillDraftFromSettingsEvent(force = false): void {
-  if (!force && isSkillDraftDirtyEvent()) return;
-  const settings = getSettingsEvent();
-  const store = getSkillPresetStoreStoreEvent(settings);
-  const normalizedStoreText = JSON.stringify(store, null, 2);
-  const activePreset = getActiveSkillPresetStoreEvent(store);
-  const activeSkillTableNormalized = normalizeSkillTableTextForSettingsEvent(activePreset.skillTableText);
-  const activeSkillTableText = activeSkillTableNormalized ?? "{}";
-
-  if (activeSkillTableNormalized == null) {
-    SKILL_EDITOR_ROWS_DRAFT_Event = [];
-    if (SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event !== activePreset.skillTableText) {
-      SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = activePreset.skillTableText;
-      console.warn("[骰子插件] 技能预设配置无效，已按空表载入");
-      pushToChat("技能预设配置格式无效，已按空表载入。");
-    }
-  } else {
-    SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = "";
-    SKILL_EDITOR_ROWS_DRAFT_Event = deserializeSkillTableTextToRowsEvent(activeSkillTableText);
-  }
-
-  SKILL_EDITOR_ACTIVE_PRESET_ID_Event = activePreset.id;
-  SKILL_EDITOR_LAST_SAVED_SNAPSHOT_Event = buildSkillDraftSnapshotEvent(SKILL_EDITOR_ROWS_DRAFT_Event);
-  SKILL_EDITOR_LAST_SETTINGS_TEXT_Event = activeSkillTableText;
-  SKILL_EDITOR_LAST_PRESET_STORE_TEXT_Event = normalizedStoreText;
-  setSkillDraftDirtyEvent(false);
-  renderSkillValidationErrorsEvent([]);
-  renderSkillPresetListModuleEvent(store, {
-    SETTINGS_SKILL_PRESET_LIST_ID_Event,
-    countSkillEntriesFromSkillTableTextEvent: countSkillEntriesFromSkillTableTextStoreEvent,
-    escapeAttrEvent,
-    escapeHtmlEvent,
-  });
-  renderSkillPresetMetaModuleEvent(store, {
-    SETTINGS_SKILL_PRESET_META_ID_Event,
-    SETTINGS_SKILL_PRESET_NAME_ID_Event,
-    SETTINGS_SKILL_PRESET_DELETE_ID_Event,
-    countSkillEntriesFromSkillTableTextEvent: countSkillEntriesFromSkillTableTextStoreEvent,
-    getActiveSkillPresetEvent: getActiveSkillPresetStoreEvent,
-  });
-  renderSkillRowsEvent();
-}
-
-function confirmDiscardSkillDraftEvent(): boolean {
-  return confirmDiscardSkillDraftModuleEvent({
-    isSkillDraftDirtyEvent,
-    hydrateSkillDraftFromSettingsEvent,
-  });
-}
 
 function isElementVisibleEvent(element: HTMLElement | null): boolean {
   return isElementVisibleModuleEvent(element);
@@ -1109,4 +1030,3 @@ export function registerDebugCommandEvent(): void {
     pushToChat,
   });
 }
-
