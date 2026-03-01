@@ -182,7 +182,7 @@ import {
   resolveTriggeredOutcomeEvent as resolveTriggeredOutcomeModuleEvent,
   sweepTimeoutFailuresEvent as sweepTimeoutFailuresModuleEvent,
 } from "../events/roundEvent";
-import type { DiceMeta, DiceOptions, DiceResult } from "../types/diceEvent";
+import type { DiceMeta, DiceResult } from "../types/diceEvent";
 import type {
   CompareOperatorEvent,
   DiceEventSpecEvent,
@@ -198,61 +198,6 @@ import type {
   SummaryDetailModeEvent,
   TavernMessageEvent,
 } from "../types/eventDomainEvent";
-
-function formatModifier(mod: number): string {
-  return formatModifierCoreEvent(mod);
-}
-
-function formatEventModifierBreakdownEvent(
-  baseModifier: number,
-  skillModifier: number,
-  finalModifier: number
-): string {
-  return formatEventModifierBreakdownCoreEvent(baseModifier, skillModifier, finalModifier);
-}
-
-function getDiceSvg(
-  value: number,
-  sides: number,
-  color: string,
-  size?: number
-): string {
-  return buildDiceSvgTemplateEvent(value, sides, color, size);
-}
-
-function getRollingSvg(color: string, size?: number): string {
-  return buildRollingSvgTemplateEvent(color, size);
-}
-
-function buildResultMessage(result: DiceResult): string {
-  return buildResultMessageTemplateEvent(result);
-}
-
-// ===== 解析表达式：NdM+X / NdM-X / NdM =====
-
-function parseDiceExpression(exprRaw: string): {
-  count: number;
-  sides: number;
-  modifier: number;
-  explode: boolean;
-} {
-  return parseDiceExpressionCoreEvent(exprRaw);
-}
-
-// ===== 核心 =====
-
-function rollExpression(
-  exprRaw: string,
-  options: DiceOptions = {}
-): DiceResult {
-  return rollExpressionCoreEvent(exprRaw, options);
-}
-
-
-
-function pushToChat(message: string) {
-  return pushToChatCoreEvent(message);
-}
 
 // ===== 存储结果到宏 =====
 
@@ -272,10 +217,10 @@ export function registerBaseMacrosAndCommandsEvent(): void {
     SlashCommandArgument,
     ARGUMENT_TYPE,
     getDiceMeta,
-    rollExpression,
+    rollExpression: rollExpressionCoreEvent,
     saveLastRoll,
-    buildResultMessage,
-    pushToChat,
+    buildResultMessage: buildResultMessageTemplateEvent,
+    pushToChat: pushToChatCoreEvent,
   });
 }
 
@@ -341,7 +286,7 @@ const skillEditorRuntimeEvent = createSkillEditorRuntimeEvent({
   deserializeSkillTableTextToRowsEvent: deserializeSkillTableTextToRowsStoreEvent,
   buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
   countSkillEntriesFromSkillTableTextEvent: countSkillEntriesFromSkillTableTextStoreEvent,
-  pushToChatEvent: pushToChat,
+  pushToChatEvent: pushToChatCoreEvent,
   escapeHtmlEvent,
   escapeAttrEvent,
 });
@@ -411,7 +356,7 @@ function bindSettingsCardMountedActionsEvent(
       buildDefaultSkillPresetStoreEvent: () => buildDefaultSkillPresetStoreTemplateStoreEvent(),
       normalizeSkillPresetNameKeyEvent: normalizeSkillPresetNameKeyStoreEvent,
       renderSkillValidationErrorsEvent,
-      pushToChat,
+      pushToChat: pushToChatCoreEvent,
     },
     skillRowsEditingActionsDepsEvent: {
       ...SETTINGS_SKILL_ROWS_EDIT_IDS_Event,
@@ -437,7 +382,7 @@ function bindSettingsCardMountedActionsEvent(
       refreshSkillDraftDirtyStateEvent,
       renderSkillValidationErrorsEvent,
       copyTextToClipboardEvent,
-      pushToChat,
+      pushToChat: pushToChatCoreEvent,
       buildSkillDraftSnapshotEvent: buildSkillDraftSnapshotStoreEvent,
       setSkillDraftDirtyEvent: skillEditorRuntimeEvent.setSkillDraftDirtyEvent,
       saveSkillPresetStoreEvent: saveSkillPresetStoreStoreEvent,
@@ -656,7 +601,7 @@ function applyTimeLimitPolicyMsEvent(
 
 function createSyntheticTimeoutDiceResultEvent(event: DiceEventSpecEvent): DiceResult {
   return createSyntheticTimeoutDiceResultModuleEvent(event, {
-    parseDiceExpression,
+    parseDiceExpression: parseDiceExpressionCoreEvent,
   });
 }
 
@@ -778,7 +723,7 @@ function formatRollRecordSummaryEvent(
   return formatRollRecordSummaryModuleEvent(record, event, {
     getSettingsEvent,
     resolveTriggeredOutcomeEvent,
-    formatEventModifierBreakdownEvent,
+    formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
   });
 }
 
@@ -850,9 +795,9 @@ function buildEventListCardEvent(round: PendingRoundEvent): string {
     buildEventRolledPrefixTemplateEvent,
     buildEventRolledBlockTemplateEvent,
     formatRollRecordSummaryEvent,
-    parseDiceExpression,
+    parseDiceExpression: parseDiceExpressionCoreEvent,
     resolveSkillModifierBySkillNameEvent,
-    formatEventModifierBreakdownEvent,
+    formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildEventRollButtonTemplateEvent,
     buildEventListItemTemplateEvent,
     buildEventListCardTemplateEvent,
@@ -876,13 +821,13 @@ function buildEventRollResultCardEvent(
   return buildEventRollResultCardModuleEvent(event, record, {
     getSettingsEvent,
     resolveTriggeredOutcomeEvent,
-    formatEventModifierBreakdownEvent,
+    formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildRollsSummaryTemplateEvent,
-    formatModifier,
+    formatModifier: formatModifierCoreEvent,
     buildEventRollResultCardTemplateEvent,
     escapeHtmlEvent,
-    getDiceSvg,
-    getRollingSvg,
+    getDiceSvg: buildDiceSvgTemplateEvent,
+    getRollingSvg: buildRollingSvgTemplateEvent,
     buildAlreadyRolledDiceVisualTemplateEvent,
   });
 }
@@ -894,14 +839,14 @@ function buildEventAlreadyRolledCardEvent(
   return buildEventAlreadyRolledCardModuleEvent(event, record, {
     getSettingsEvent,
     resolveTriggeredOutcomeEvent,
-    formatEventModifierBreakdownEvent,
+    formatEventModifierBreakdownEvent: formatEventModifierBreakdownCoreEvent,
     buildEventDistributionBlockTemplateEvent,
     buildEventTimeoutAtBlockTemplateEvent,
     buildEventAlreadyRolledCardTemplateEvent,
     escapeHtmlEvent,
-    formatModifier,
-    getDiceSvg,
-    getRollingSvg,
+    formatModifier: formatModifierCoreEvent,
+    getDiceSvg: buildDiceSvgTemplateEvent,
+    getRollingSvg: buildRollingSvgTemplateEvent,
     buildAlreadyRolledDiceVisualTemplateEvent,
   });
 }
@@ -918,9 +863,9 @@ function performEventRollByIdEvent(
     saveMetadataSafeEvent,
     getLatestRollRecordForEvent,
     buildEventAlreadyRolledCardEvent,
-    pushToChat,
+    pushToChat: pushToChatCoreEvent,
     refreshCountdownDomEvent,
-    rollExpression,
+    rollExpression: rollExpressionCoreEvent,
     getSettingsEvent,
     resolveSkillModifierBySkillNameEvent,
     applySkillModifierToDiceResultEvent,
@@ -937,7 +882,7 @@ function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
     getSettingsEvent,
     ensureRoundEventTimersSyncedEvent,
     getLatestRollRecordForEvent,
-    rollExpression,
+    rollExpression: rollExpressionCoreEvent,
     resolveSkillModifierBySkillNameEvent,
     applySkillModifierToDiceResultEvent,
     normalizeCompareOperatorEvent,
@@ -952,7 +897,7 @@ function autoRollEventsByAiModeEvent(round: PendingRoundEvent): string[] {
 export function bindEventButtonsEvent(): void {
   bindEventButtonsModuleEvent({
     performEventRollByIdEvent,
-    pushToChat,
+    pushToChat: pushToChatCoreEvent,
   });
 }
 
@@ -974,7 +919,7 @@ function handleGenerationEndedEvent(retry = 0): void {
     mergeEventsIntoPendingRoundEvent,
     autoRollEventsByAiModeEvent,
     buildEventListCardEvent,
-    pushToChat,
+    pushToChat: pushToChatCoreEvent,
     sweepTimeoutFailuresEvent,
     refreshCountdownDomEvent,
     saveMetadataSafeEvent,
@@ -994,7 +939,7 @@ export function registerEventRollCommandEvent(): void {
     SlashCommand,
     SlashCommandArgument,
     ARGUMENT_TYPE,
-    pushToChat,
+    pushToChat: pushToChatCoreEvent,
     sweepTimeoutFailuresEvent,
     getDiceMetaEvent,
     getSettingsEvent,
@@ -1035,6 +980,6 @@ export function registerDebugCommandEvent(): void {
     getDiceMeta,
     getDiceMetaEvent,
     escapeHtmlEvent,
-    pushToChat,
+    pushToChat: pushToChatCoreEvent,
   });
 }
