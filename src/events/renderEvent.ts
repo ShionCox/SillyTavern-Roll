@@ -9,6 +9,7 @@ import type {
   PendingRoundEvent,
 } from "../types/eventDomainEvent";
 import { ensureActiveStatusesEvent, resolveStatusModifiersForSkillEvent, stripStatusTagsFromTextEvent } from "./statusEvent";
+import { logger } from "../../index";
 
 export type EventRuntimeToneEvent = "neutral" | "warn" | "danger" | "success";
 
@@ -204,7 +205,7 @@ export function hideEventCodeBlocksInDomEvent(): void {
       pre.remove();
     }
   } catch (error) {
-    console.warn("[骰子插件] 隐藏事件代码块失败", error);
+    logger.warn("隐藏事件代码块失败", error);
   }
 }
 
@@ -361,9 +362,9 @@ export function buildEventListCardEvent(
 
       const rolledBlock = lastRecord
         ? deps.buildEventRolledBlockTemplateEvent(
-            rolledPrefix,
-            deps.escapeHtmlEvent(deps.formatRollRecordSummaryEvent(lastRecord, event))
-          )
+          rolledPrefix,
+          deps.escapeHtmlEvent(deps.formatRollRecordSummaryEvent(lastRecord, event))
+        )
         : "";
       const outcomePreviewHtml = buildOutcomePreviewHtmlEvent(event, settings, deps.escapeHtmlEvent);
 
@@ -391,23 +392,21 @@ export function buildEventListCardEvent(
       const modifierText =
         settings.enableSkillSystem || statusResolved.modifier !== 0
           ? `${deps.formatModifier(baseModifierUsed)} + 技能 ${deps.formatModifier(
-              skillModifierApplied
-            )} + 状态 ${deps.formatModifier(statusResolved.modifier)} = ${deps.formatModifier(
-              finalModifierUsed
-            )}`
+            skillModifierApplied
+          )} + 状态 ${deps.formatModifier(statusResolved.modifier)} = ${deps.formatModifier(
+            finalModifierUsed
+          )}`
           : "";
       const skillHoverTextFinal = settings.enableSkillSystem
-        ? `技能修正：${deps.formatModifier(skillModifierApplied)}${
-            statusResolved.modifier !== 0
-              ? `；状态 ${deps.formatModifier(statusResolved.modifier)}${
-                  statusResolved.matched.length > 0
-                    ? `（${statusResolved.matched
-                        .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
-                        .join("，")}）`
-                    : ""
-                }`
-              : ""
-          }${modifierText ? `（${modifierText}）` : ""}`
+        ? `技能修正：${deps.formatModifier(skillModifierApplied)}${statusResolved.modifier !== 0
+          ? `；状态 ${deps.formatModifier(statusResolved.modifier)}${statusResolved.matched.length > 0
+            ? `（${statusResolved.matched
+              .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
+              .join("，")}）`
+            : ""
+          }`
+          : ""
+        }${modifierText ? `（${modifierText}）` : ""}`
         : "技能系统已关闭";
 
       const advantageStateText = formatAdvantageStateForCardEvent(
@@ -416,12 +415,12 @@ export function buildEventListCardEvent(
 
       const rollButtonHtml = showRollButton
         ? deps.buildEventRollButtonTemplateEvent({
-            roundIdAttr: deps.escapeAttrEvent(round.roundId),
-            eventIdAttr: deps.escapeAttrEvent(event.id),
-            diceExprAttr: deps.escapeAttrEvent(event.checkDice),
-            buttonDisabledAttr: buttonDisabled,
-            buttonStateStyle,
-          })
+          roundIdAttr: deps.escapeAttrEvent(round.roundId),
+          eventIdAttr: deps.escapeAttrEvent(event.id),
+          diceExprAttr: deps.escapeAttrEvent(event.checkDice),
+          buttonDisabledAttr: buttonDisabled,
+          buttonStateStyle,
+        })
         : "";
 
       return deps.buildEventListItemTemplateEvent({
@@ -504,8 +503,8 @@ function buildDiceComputationTooltipEvent(
   const finalModifier = Number.isFinite(Number(finalModifierUsed))
     ? Number(finalModifierUsed)
     : hasSkillModifier
-    ? baseModifier + skillModifier
-    : Number(result.modifier) || 0;
+      ? baseModifier + skillModifier
+      : Number(result.modifier) || 0;
 
   const parts: string[] = [];
   parts.push(`骰面 ${rollsText}`);
@@ -576,8 +575,8 @@ export function buildAnimatedDiceVisualBlockEvent(
   const finalDiceSvg = buildFinalTotalDiceVisualEvent(finalTotal, resultColor, diceSize);
   const diceVisuals = sharedTooltip
     ? `<span style="display:inline-flex;cursor:help;" title="${escapeTooltipAttrEvent(
-        `${sharedTooltip} | 总计: ${finalTotal}`
-      )}">${finalDiceSvg}</span>`
+      `${sharedTooltip} | 总计: ${finalTotal}`
+    )}">${finalDiceSvg}</span>`
     : finalDiceSvg;
   const rollingVisual = deps.getRollingSvg("#ffdb78", rollingSize);
 
@@ -668,8 +667,8 @@ export function buildEventRollResultCardEvent(
     record.source === "timeout_auto_fail"
       ? "超时自动检定"
       : record.source === "ai_auto_roll"
-      ? "AI 自动检定"
-      : "主动检定";
+        ? "AI 自动检定"
+        : "主动检定";
   const baseModifierUsed = Number.isFinite(Number(record.baseModifierUsed))
     ? Number(record.baseModifierUsed)
     : Number(record.result.modifier) || 0;
@@ -692,25 +691,25 @@ export function buildEventRollResultCardEvent(
     record.source === "timeout_auto_fail"
       ? ""
       : buildAnimatedDiceVisualBlockEvent(
-          record.result,
-          {
-            getDiceSvg: deps.getDiceSvg,
-            getRollingSvg: deps.getRollingSvg,
-            buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
-          },
-          true,
-          diceTooltipText
-        );
+        record.result,
+        {
+          getDiceSvg: deps.getDiceSvg,
+          getRollingSvg: deps.getRollingSvg,
+          buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
+        },
+        true,
+        diceTooltipText
+      );
   const modifierBreakdownText =
     settings.enableSkillSystem || statusModifierApplied !== 0
       ? `${deps.formatModifier(baseModifierUsed)} + 技能 ${deps.formatModifier(
-          skillModifierApplied
-        )} + 状态 ${deps.formatModifier(statusModifierApplied)} = ${deps.formatModifier(finalModifierUsed)}`
+        skillModifierApplied
+      )} + 状态 ${deps.formatModifier(statusModifierApplied)} = ${deps.formatModifier(finalModifierUsed)}`
       : "";
   const skillHoverText = settings.enableSkillSystem
     ? `技能修正：${deps.formatModifier(skillModifierApplied)}；状态 ${deps.formatModifier(
-        statusModifierApplied
-      )}${modifierBreakdownText ? `（${modifierBreakdownText}）` : ""}`
+      statusModifierApplied
+    )}${modifierBreakdownText ? `（${modifierBreakdownText}）` : ""}`
     : "技能系统已关闭";
   const diceModifierHint =
     settings.enableSkillSystem && (skillModifierApplied !== 0 || statusModifierApplied !== 0)
@@ -718,13 +717,12 @@ export function buildEventRollResultCardEvent(
       : "";
   const statusImpactHtml =
     statusModifierApplied !== 0
-      ? `受状态影响 ${deps.formatModifier(statusModifierApplied)}${
-          Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
-            ? `（${record.statusModifiersApplied
-                .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
-                .join("，")}）`
-            : ""
-        }`
+      ? `受状态影响 ${deps.formatModifier(statusModifierApplied)}${Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
+        ? `（${record.statusModifiersApplied
+          .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
+          .join("，")}）`
+        : ""
+      }`
       : "";
 
   return deps.buildEventRollResultCardTemplateEvent({
@@ -828,8 +826,8 @@ export function buildEventAlreadyRolledCardEvent(
   const sourceText = isTimeout
     ? "系统强制结算"
     : record.source === "ai_auto_roll"
-    ? "AI 自动检定"
-    : "玩家主动检定";
+      ? "AI 自动检定"
+      : "玩家主动检定";
   const statusText = record.success === null ? "未决" : record.success ? "成功" : "失败";
   const statusColor = record.success === null ? "#a3957a" : record.success ? "#52c41a" : "#ff4d4f";
 
@@ -854,42 +852,41 @@ export function buildEventAlreadyRolledCardEvent(
   const diceVisualBlock = isTimeout
     ? ""
     : buildAnimatedDiceVisualBlockEvent(
-        record.result,
-        {
-          getDiceSvg: deps.getDiceSvg,
-          getRollingSvg: deps.getRollingSvg,
-          buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
-        },
-        false,
-        diceTooltipText
-      );
+      record.result,
+      {
+        getDiceSvg: deps.getDiceSvg,
+        getRollingSvg: deps.getRollingSvg,
+        buildAlreadyRolledDiceVisualTemplateEvent: deps.buildAlreadyRolledDiceVisualTemplateEvent,
+      },
+      false,
+      diceTooltipText
+    );
   const modifierBreakdownHtml =
     settings.enableSkillSystem || statusModifierApplied !== 0
       ? `${deps.formatModifier(baseModifierUsed)} + 技能 ${deps.formatModifier(
-          skillModifierApplied
-        )} + 状态 ${deps.formatModifier(statusModifierApplied)} = ${deps.formatModifier(finalModifierUsed)}`
+        skillModifierApplied
+      )} + 状态 ${deps.formatModifier(statusModifierApplied)} = ${deps.formatModifier(finalModifierUsed)}`
       : "";
   const statusImpactHtml =
     statusModifierApplied !== 0
-      ? `受状态影响 ${deps.formatModifier(statusModifierApplied)}${
-          Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
-            ? `（${record.statusModifiersApplied
-                .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
-                .join("，")}）`
-            : ""
-        }`
+      ? `受状态影响 ${deps.formatModifier(statusModifierApplied)}${Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
+        ? `（${record.statusModifiersApplied
+          .map((item) => `${item.name}${deps.formatModifier(item.modifier)}`)
+          .join("，")}）`
+        : ""
+      }`
       : "";
 
   const distributionBlock = !isTimeout && record.result
     ? deps.buildEventDistributionBlockTemplateEvent(
-        deps.escapeHtmlEvent(record.result.rolls.join(", ")),
-        deps.escapeHtmlEvent(deps.formatModifier(record.result.modifier))
-      )
+      deps.escapeHtmlEvent(record.result.rolls.join(", ")),
+      deps.escapeHtmlEvent(deps.formatModifier(record.result.modifier))
+    )
     : "";
   const timeoutBlock = record.timeoutAt
     ? deps.buildEventTimeoutAtBlockTemplateEvent(
-        deps.escapeHtmlEvent(new Date(record.timeoutAt).toISOString())
-      )
+      deps.escapeHtmlEvent(new Date(record.timeoutAt).toISOString())
+    )
     : "";
 
   return deps.buildEventAlreadyRolledCardTemplateEvent({

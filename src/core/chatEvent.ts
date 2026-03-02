@@ -1,4 +1,5 @@
 import { sendSystemMessage } from "./runtimeContextEvent";
+import { logger } from "../../index";
 
 export function pushToChat(message: string) {
   if (typeof sendSystemMessage === "function") {
@@ -9,7 +10,7 @@ export function pushToChat(message: string) {
       });
       return;
     } catch (e) {
-      console.error("[骰子插件] 发送到聊天框失败:", e);
+      logger.error("发送到聊天框失败:", e);
     }
   }
   return message;

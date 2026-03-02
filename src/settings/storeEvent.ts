@@ -8,6 +8,7 @@ import type {
   SkillPresetStoreEvent,
   SummaryDetailModeEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 import {
   chatMetadata,
   extensionSettings,
@@ -35,7 +36,7 @@ const LOCAL_SETTINGS_FALLBACK_Event: DicePluginSettingsEvent = {
   ...DEFAULT_SETTINGS_Event,
 };
 
-let syncSettingsUiCallbackEvent: () => void = () => {};
+let syncSettingsUiCallbackEvent: () => void = () => { };
 
 export function setSyncSettingsUiCallbackEvent(callback: () => void): void {
   syncSettingsUiCallbackEvent = callback;
@@ -82,7 +83,7 @@ export function saveMetadataSafeEvent(): void {
     try {
       liveCtx.saveMetadata();
     } catch (error) {
-      console.warn("[骰子插件] 保存 Event 元数据失败", error);
+      logger.warn("保存 Event 元数据失败", error);
     }
   }
 }
@@ -94,7 +95,7 @@ export function saveSettingsSafeEvent(): void {
     try {
       saver.call(liveCtx);
     } catch (error) {
-      console.warn("[骰子插件] 保存扩展设置失败", error);
+      logger.warn("保存扩展设置失败", error);
     }
   }
 }
@@ -106,10 +107,10 @@ export function persistChatSafeEvent(): void {
   if (typeof fn !== "function") return;
   try {
     Promise.resolve(fn.call(liveCtx)).catch((error) => {
-      console.warn("[骰子插件] 保存聊天失败", error);
+      logger.warn("保存聊天失败", error);
     });
   } catch (error) {
-    console.warn("[骰子插件] 保存聊天失败", error);
+    logger.warn("保存聊天失败", error);
   }
 }
 
@@ -523,14 +524,14 @@ export function getSkillModifierTableMapEvent(settings: DicePluginSettingsEvent)
     const parsed = JSON.parse(rawText);
     const normalized = normalizeSkillTableObjectEvent(parsed);
     if (normalized == null) {
-      console.warn("[骰子插件] skillTableText 不是 JSON 对象，已按空表处理");
+      logger.warn("skillTableText 不是 JSON 对象，已按空表处理");
       SKILL_TABLE_CACHE_MAP_Event = {};
       return SKILL_TABLE_CACHE_MAP_Event;
     }
     SKILL_TABLE_CACHE_MAP_Event = normalized;
     return SKILL_TABLE_CACHE_MAP_Event;
   } catch (error) {
-    console.warn("[骰子插件] skillTableText 解析失败，已按空表处理", error);
+    logger.warn("skillTableText 解析失败，已按空表处理", error);
     SKILL_TABLE_CACHE_MAP_Event = {};
     return SKILL_TABLE_CACHE_MAP_Event;
   }

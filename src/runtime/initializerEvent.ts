@@ -11,6 +11,8 @@ import {
   sweepTimeoutFailuresEvent,
 } from "./eventRuntime";
 
+import { logger } from "../../index";
+
 const INITIALIZE_RETRY_MAX_Event = 80;
 const INITIALIZE_RETRY_DELAY_MS_Event = 500;
 
@@ -39,5 +41,5 @@ export function initializeEventRuntimeEvent(attempt = 0): void {
     return;
   }
 
-  console.info("[骰子插件] Event 初始化完成");
+  logger.info("Event 初始化完成");
 }

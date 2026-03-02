@@ -72,6 +72,10 @@ export const SETTINGS_PANEL_RULE_ID_Event = "st-roll-settings-Event-panel-rule";
 export const SETTINGS_PANEL_ABOUT_ID_Event = "st-roll-settings-Event-panel-about";
 
 const manifestAny_Event = manifestJson as Record<string, any>;
+export const SETTINGS_DISPLAY_NAME_Event =
+  typeof manifestAny_Event.display_name === "string" && manifestAny_Event.display_name.trim().length > 0
+    ? manifestAny_Event.display_name.trim()
+    : "SillyTavern-Roll Event";
 export const SETTINGS_BADGE_VERSION_Event =
   typeof manifestJson.version === "string" && manifestJson.version.trim().length > 0
     ? manifestJson.version.trim()
@@ -85,9 +89,9 @@ export const SETTINGS_EMAIL_TEXT_Event =
     ? manifestAny_Event.email.trim()
     : "348591466@qq.com";
 export const SETTINGS_GITHUB_URL_Event =
-  typeof manifestAny_Event.homepage === "string" &&
-  /^https?:\/\//i.test(manifestAny_Event.homepage.trim())
-    ? manifestAny_Event.homepage.trim()
+  typeof manifestAny_Event.homePage === "string" &&
+    /^https?:\/\//i.test(manifestAny_Event.homePage.trim())
+    ? manifestAny_Event.homePage.trim()
     : "https://github.com/ShionCox/SillyTavern-Roll";
 export const SETTINGS_GITHUB_TEXT_Event = SETTINGS_GITHUB_URL_Event.replace(
   /^https?:\/\//i,
@@ -95,6 +99,7 @@ export const SETTINGS_GITHUB_TEXT_Event = SETTINGS_GITHUB_URL_Event.replace(
 );
 export const SETTINGS_TEMPLATE_STATIC_DEPS_Event = {
   SETTINGS_CARD_ID_Event,
+  SETTINGS_DISPLAY_NAME_Event,
   SETTINGS_BADGE_ID_Event,
   SETTINGS_BADGE_VERSION_Event,
   SETTINGS_AUTHOR_TEXT_Event,

@@ -8,6 +8,7 @@ import type {
   RoundSummarySnapshotEvent,
   TavernMessageEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 
 const DEFAULT_RULE_BLOCK_START_Event = "<dice_rules>";
 const DEFAULT_RULE_BLOCK_END_Event = "</dice_rules>";
@@ -629,7 +630,7 @@ export function handlePromptReadyEvent(
   if (!isSameUserPrompt && !settings.enableAiRoundControl && meta.pendingRound?.status === "open") {
     meta.pendingRound.status = "closed";
     changedMeta = true;
-    console.info("[骰子插件] 已按“每轮模式”在用户发言后结束当前轮次");
+    logger.info("已按“每轮模式”在用户发言后结束当前轮次");
   }
 
   const currentText = getMessageTextEvent(injectionMsg);
@@ -705,5 +706,5 @@ export function handlePromptReadyEvent(
     deps.saveMetadataSafeEvent();
   }
 
-  console.info(`[骰子插件] Prompt managed blocks updated via ${sourceEvent} (target=${injectionTarget})`);
+  logger.info(`Prompt managed blocks updated via ${sourceEvent} (target=${injectionTarget})`);
 }

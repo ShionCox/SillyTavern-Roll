@@ -9,6 +9,7 @@ import type {
   EventScopeTagEvent,
   EventTargetTypeEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 
 export type RemovalRangeEvent = { start: number; end: number };
 
@@ -32,7 +33,7 @@ export function normalizeOutcomeTextEvent(
   if (!text) return undefined;
   if (text.length <= OUTCOME_TEXT_MAX_LEN_Event) return text;
   const truncated = text.slice(0, OUTCOME_TEXT_MAX_LEN_Event);
-  console.warn(`[骰子插件] outcomes.${fieldName} 过长，已截断: event=${eventId} len=${text.length}`);
+  logger.warn(`outcomes.${fieldName} 过长，已截断: event=${eventId} len=${text.length}`);
   return `${truncated}（已截断）`;
 }
 
@@ -45,7 +46,7 @@ function normalizeDcReasonTextEvent(
   if (!text) return undefined;
   if (text.length <= maxLen) return text;
   const truncated = text.slice(0, maxLen);
-  console.warn(`[骰子插件] dc_reason 过长，已截断: event=${eventId} len=${text.length}`);
+  logger.warn(`dc_reason 过长，已截断: event=${eventId} len=${text.length}`);
   return `${truncated}（已截断）`;
 }
 
@@ -66,12 +67,12 @@ export function parseIsoDurationToMsEvent(raw: string, ISO_8601_DURATION_REGEX_E
   const value = normalizeStringFieldEvent(raw);
   if (!value) return null;
   if (!ISO_8601_DURATION_REGEX_Event.test(value)) {
-    console.warn("[骰子插件] 非法 timeLimit，按不限时处理:", value);
+    logger.warn("非法 timeLimit，按不限时处理:", value);
     return null;
   }
   const match = value.match(/^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i);
   if (!match) {
-    console.warn("[骰子插件] 不支持的 timeLimit 组合，按不限时处理:", value);
+    logger.warn("不支持的 timeLimit 组合，按不限时处理:", value);
     return null;
   }
 
@@ -83,7 +84,7 @@ export function parseIsoDurationToMsEvent(raw: string, ISO_8601_DURATION_REGEX_E
   const totalSeconds = (((weeks * 7 + days) * 24 + hours) * 60 + minutes) * 60 + seconds;
   const totalMs = totalSeconds * 1000;
   if (!Number.isFinite(totalMs) || totalMs < 0) {
-    console.warn("[骰子插件] timeLimit 解析失败，按不限时处理:", value);
+    logger.warn("timeLimit 解析失败，按不限时处理:", value);
     return null;
   }
   return totalMs;
@@ -98,7 +99,7 @@ export function applyTimeLimitPolicyMsEvent(
   const minSeconds = Math.max(1, Math.floor(Number(settings.minTimeLimitSeconds) || 1));
   const minMs = minSeconds * 1000;
   if (durationMs < minMs) {
-    console.info(`[骰子插件] timeLimit 低于最短时限，提升到 ${minSeconds}s（原始 ${durationMs}ms）`);
+    logger.info(`timeLimit 低于最短时限，提升到 ${minSeconds}s（原始 ${durationMs}ms）`);
     return minMs;
   }
   return durationMs;
@@ -360,14 +361,14 @@ export function normalizeEventSpecEvent(raw: any, deps: NormalizeEventSpecDepsEv
   if (!isDiceExpressionAllowedBySettingsEvent(checkDice, settings)) {
     const normalized = normalizeDiceExpressionByAllowedSidesEvent(checkDice, settings);
     if (normalized.changed) {
-      console.warn(
-        `[骰子插件] 事件骰式不在允许面数列表中，自动修正: event=${id} from=${checkDice} to=${normalized.nextExpr} allowed=${normalized.allowedSidesText || "(未配置)"}`
+      logger.warn(
+        `事件骰式不在允许面数列表中，自动修正: event=${id} from=${checkDice} to=${normalized.nextExpr} allowed=${normalized.allowedSidesText || "(未配置)"}`
       );
       checkDice = normalized.nextExpr;
     } else {
       const allowedText = normalizeStringFieldEvent(settings.aiAllowedDiceSidesText);
-      console.warn(
-        `[骰子插件] 事件骰式不在允许面数列表中，已忽略: event=${id} checkDice=${checkDice} allowed=${allowedText || "(未配置)"}`
+      logger.warn(
+        `事件骰式不在允许面数列表中，已忽略: event=${id} checkDice=${checkDice} allowed=${allowedText || "(未配置)"}`
       );
       return null;
     }
@@ -394,7 +395,7 @@ export function normalizeEventSpecEvent(raw: any, deps: NormalizeEventSpecDepsEv
   };
 }
 
-export interface NormalizeEnvelopeDepsEvent extends NormalizeEventSpecDepsEvent {}
+export interface NormalizeEnvelopeDepsEvent extends NormalizeEventSpecDepsEvent { }
 
 function normalizeRoundControlEndFlagEvent(raw: any): boolean {
   if (!raw || typeof raw !== "object") return false;
@@ -428,7 +429,7 @@ export function normalizeEnvelopeEvent(
   for (const candidate of raw.events) {
     const normalized = normalizeEventSpecEvent(candidate, deps);
     if (!normalized) {
-      console.warn("[骰子插件] 丢弃非法事件字段", candidate);
+      logger.warn("丢弃非法事件字段", candidate);
       continue;
     }
     events.push(normalized);
@@ -586,7 +587,7 @@ export function parseEventEnvelopesEvent(
       if (!parsed) throw new Error("无法修复为合法 JSON");
     } catch (error) {
       if (hasDiceEventType) {
-        console.warn("[骰子插件] 事件 JSON 解析失败，已隐藏代码块", error);
+        logger.warn("事件 JSON 解析失败，已隐藏代码块", error);
       }
       continue;
     }
@@ -615,7 +616,7 @@ export function parseEventEnvelopesEvent(
       if (!parsed) throw new Error("无法修复为合法 JSON");
     } catch (error) {
       if (hasDiceEventType) {
-        console.warn("[骰子插件] HTML 事件 JSON 解析失败，已隐藏代码块", error);
+        logger.warn("HTML 事件 JSON解析失败，已隐藏代码块", error);
       }
       continue;
     }

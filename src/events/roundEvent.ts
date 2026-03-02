@@ -13,6 +13,7 @@ import type {
   PendingResultGuidanceEvent,
   PendingRoundEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 import {
   applyStatusCommandsToMetaEvent,
   ensureActiveStatusesEvent,
@@ -824,7 +825,7 @@ export function autoRollEventsByAiModeEvent(round: PendingRoundEvent, deps: Auto
 
     const execution = resolveRollExecutionOptionsEvent(expr, event, settings, deps.parseDiceExpression);
     if (execution.errorText) {
-      console.warn(`[骰子插件] AI 自动掷骰被跳过: event=${event.id} reason=${execution.errorText}`);
+      logger.warn(`AI 自动掷骰被跳过: event=${event.id} reason=${execution.errorText}`);
       continue;
     }
 
@@ -836,7 +837,7 @@ export function autoRollEventsByAiModeEvent(round: PendingRoundEvent, deps: Auto
         dis: execution.dis,
       });
     } catch (error) {
-      console.warn(`[骰子插件] AI 自动掷骰失败: event=${event.id}`, error);
+      logger.warn(`AI 自动掷骰失败: event=${event.id}`, error);
       continue;
     }
 
@@ -931,12 +932,12 @@ export function formatRollRecordSummaryEvent(
     const resolved = event
       ? deps.resolveTriggeredOutcomeEvent(event, record, settings)
       : record.result.explosionTriggered && settings.enableExplodeOutcomeBranch
-      ? { kind: "explode" as EventOutcomeKindEvent }
-      : record.success === true
-      ? { kind: "success" as EventOutcomeKindEvent }
-      : record.success === false
-      ? { kind: "failure" as EventOutcomeKindEvent }
-      : { kind: "none" as EventOutcomeKindEvent };
+        ? { kind: "explode" as EventOutcomeKindEvent }
+        : record.success === true
+          ? { kind: "success" as EventOutcomeKindEvent }
+          : record.success === false
+            ? { kind: "failure" as EventOutcomeKindEvent }
+            : { kind: "none" as EventOutcomeKindEvent };
     if (resolved.kind !== "none") {
       outcomeTag = ` | 走向:${resolved.kind}`;
     }
@@ -945,20 +946,19 @@ export function formatRollRecordSummaryEvent(
   const targetTag = targetLabel ? ` | 对象:${targetLabel}` : "";
   const modifierTag = settings.enableSkillSystem
     ? ` | 修正:${deps.formatEventModifierBreakdownEvent(
-        baseModifierUsed,
-        skillModifierApplied,
-        finalModifierUsed
-      )}`
+      baseModifierUsed,
+      skillModifierApplied,
+      finalModifierUsed
+    )}`
     : "";
   const statusDetailTag =
     statusModifierApplied !== 0
-      ? ` | 状态:${statusModifierApplied > 0 ? `+${statusModifierApplied}` : statusModifierApplied}${
-          Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
-            ? `(${record.statusModifiersApplied
-                .map((item) => `${item.name}${item.modifier > 0 ? `+${item.modifier}` : item.modifier}`)
-                .join(",")})`
-            : ""
-        }`
+      ? ` | 状态:${statusModifierApplied > 0 ? `+${statusModifierApplied}` : statusModifierApplied}${Array.isArray(record.statusModifiersApplied) && record.statusModifiersApplied.length > 0
+        ? `(${record.statusModifiersApplied
+          .map((item) => `${item.name}${item.modifier > 0 ? `+${item.modifier}` : item.modifier}`)
+          .join(",")})`
+        : ""
+      }`
       : "";
   const advantageTag =
     record.advantageStateApplied && record.advantageStateApplied !== ADVANTAGE_NORMAL_Event

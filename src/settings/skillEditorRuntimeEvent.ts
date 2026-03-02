@@ -10,6 +10,7 @@ import type {
   SkillEditorRowDraftEvent,
   SkillPresetStoreEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 
 export interface CreateSkillEditorRuntimeEventDeps {
   SETTINGS_SKILL_DIRTY_HINT_ID_Event: string;
@@ -125,7 +126,7 @@ export function createSkillEditorRuntimeEvent(
       SKILL_EDITOR_ROWS_DRAFT_Event = [];
       if (SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event !== activePreset.skillTableText) {
         SKILL_EDITOR_INVALID_SETTINGS_WARNED_TEXT_Event = activePreset.skillTableText;
-        console.warn("[骰子插件] 技能预设配置无效，已按空表载入");
+        logger.warn("技能预设配置无效，已按空表载入");
         deps.pushToChatEvent("技能预设配置格式无效，已按空表载入。");
       }
     } else {

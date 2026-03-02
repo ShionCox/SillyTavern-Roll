@@ -318,6 +318,35 @@ export function buildSettingsCardStylesTemplateEvent(cardId: string): string {
       min-height: 220px;
     }
 
+    #${cardId} .st-roll-changelog {
+      width: 100%;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      padding: 10px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    #${cardId} .st-roll-changelog ul {
+      list-style-type: disc;
+      color: inherit;
+    }
+
+    #${cardId} .st-roll-changelog li {
+      margin-bottom: 4px;
+    }
+
+    #${cardId} .st-roll-changelog::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #${cardId} .st-roll-changelog::-webkit-scrollbar-thumb {
+      background: rgba(197, 160, 89, 0.4);
+      border-radius: 4px;
+    }
+
     #${cardId} .st-roll-skill-head {
       display: flex;
       align-items: center;

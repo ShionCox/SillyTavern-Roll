@@ -5,6 +5,7 @@ import type {
   PendingRoundEvent,
   TavernMessageEvent,
 } from "../types/eventDomainEvent";
+import { logger } from "../../index";
 
 export interface EventHooksDepsEvent {
   getLiveContextEvent: () => STContext | null;
@@ -140,7 +141,7 @@ export function handleGenerationEndedEvent(
     if (settings.enableAiRoundControl && chosenShouldEndRound) {
       pendingRound.status = "closed";
       closedByAiDirective = true;
-      console.info("[骰子插件] AI 指令结束当前轮次（round_control=end_round）");
+      logger.info("AI 指令结束当前轮次（round_control=end_round）");
     }
   }
 
@@ -156,10 +157,10 @@ export function handleGenerationEndedEvent(
     deps.refreshCountdownDomEvent();
   } else {
     if (chosenEvents.length > 0 && settings.eventApplyScope === "protagonist_only") {
-      console.info("[骰子插件] 事件已按“仅主角行动事件”过滤，本次无可用事件");
+      logger.info("事件已按“仅主角行动事件”过滤，本次无可用事件");
     }
     if (closedByAiDirective) {
-      console.info("[骰子插件] 当前轮次已结束，等待下一轮事件");
+      logger.info("当前轮次已结束，等待下一轮事件");
     }
     deps.saveMetadataSafeEvent();
   }
@@ -275,7 +276,7 @@ export function clearDiceMetaEventState(
   if (normalizedReason !== "chat_reset") {
     delete meta.lastProcessedAssistantMsgId;
     deps.saveMetadataSafeEvent();
-    console.info(`[骰子插件] 保留 Event 轮次状态，仅重置会话游标 (${reason})`);
+    logger.info(`保留 Event 轮次状态，仅重置会话游标 (${reason})`);
     return;
   }
 
@@ -287,7 +288,7 @@ export function clearDiceMetaEventState(
   delete meta.lastPromptUserMsgId;
   delete meta.lastProcessedAssistantMsgId;
   deps.saveMetadataSafeEvent();
-  console.info(`[骰子插件] 已清理 Event 轮次状态 (${reason})`);
+  logger.info(`已清理 Event 轮次状态 (${reason})`);
 }
 
 export interface BindEventButtonsDepsEvent {
@@ -337,7 +338,7 @@ export function startCountdownTickerEvent(deps: Pick<EventHooksDepsEvent, "sweep
       deps.sweepTimeoutFailuresEvent();
       deps.refreshCountdownDomEvent();
     } catch (error) {
-      console.warn("[骰子插件] 倒计时刷新异常", error);
+      logger.warn("倒计时刷新异常", error);
     }
   }, 1000);
 }
@@ -358,8 +359,8 @@ export function registerEventHooksEvent(deps: EventHooksDepsEvent): void {
       )
     )
   );
-  console.info(
-    `[骰子插件] prompt 注入监听事件: ${promptEvents.length > 0 ? promptEvents.join(", ") : "(none)"}`
+  logger.info(
+    `prompt 注入监听事件: ${promptEvents.length > 0 ? promptEvents.join(", ") : "(none)"}`
   );
   const bindPrompt =
     typeof (src as any).makeLast === "function"
@@ -395,11 +396,11 @@ export function registerEventHooksEvent(deps: EventHooksDepsEvent): void {
     bindPrompt(eventName, (payload: any) => {
       try {
         if (!deps.extractPromptChatFromPayloadEvent(payload)) {
-          console.info(`[骰子插件] ${eventName} 已触发，但 payload 中未发现 chat/messages`);
+          logger.info(`${eventName} 已触发，但 payload 中未发现 chat/messages`);
         }
         deps.handlePromptReadyEvent(payload, eventName);
       } catch (error) {
-        console.error("[骰子插件] Prompt hook 错误", error);
+        logger.error("Prompt hook 错误", error);
       }
     });
   }
@@ -409,7 +410,7 @@ export function registerEventHooksEvent(deps: EventHooksDepsEvent): void {
       try {
         deps.handleGenerationEndedEvent();
       } catch (error) {
-        console.error("[骰子插件] Generation hook 错误", error);
+        logger.error("Generation hook 错误", error);
       }
     });
   }
@@ -424,7 +425,7 @@ export function registerEventHooksEvent(deps: EventHooksDepsEvent): void {
           deps.refreshCountdownDomEvent();
         }, 0);
       } catch (error) {
-        console.error("[骰子插件] Reset hook 错误", error);
+        logger.error("Reset hook 错误", error);
       }
     });
   }

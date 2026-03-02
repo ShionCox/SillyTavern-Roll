@@ -3,12 +3,14 @@ export interface SettingsCardTemplateIdsEvent {
   drawerToggleId: string;
   drawerContentId: string;
   drawerIconId: string;
+  displayName: string;
   badgeId: string;
   badgeText: string;
   authorText: string;
   emailText: string;
   githubText: string;
   githubUrl: string;
+  changelogHtml: string;
   searchId: string;
   tabMainId: string;
   tabSkillId: string;

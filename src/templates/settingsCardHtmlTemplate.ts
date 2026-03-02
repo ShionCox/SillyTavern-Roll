@@ -5,7 +5,7 @@ export function buildSettingsCardHtmlTemplateEvent(ids: SettingsCardTemplateIdsE
     <div class="inline-drawer st-roll-shell">
       <div class="inline-drawer-toggle inline-drawer-header st-roll-head" id="${ids.drawerToggleId}">
         <div class="st-roll-head-title">
-          <span>骰子助手</span>
+          <span style="margin-bottom: 2px;">${ids.displayName}</span>
           <span id="${ids.badgeId}" class="st-roll-head-badge">${ids.badgeText}</span>
         </div>
         <div id="${ids.drawerIconId}" class="inline-drawer-icon fa-solid fa-circle-chevron-down down interactable" tabindex="0" role="button"></div>
@@ -324,15 +324,34 @@ export function buildSettingsCardHtmlTemplateEvent(ids: SettingsCardTemplateIdsE
         <div id="${ids.panelAboutId}" class="st-roll-panel" hidden>
           <div class="st-roll-divider"><i class="fa-solid fa-circle-info"></i><span>关于插件</span><div class="st-roll-divider-line"></div></div>
 
-          <div class="st-roll-item st-roll-search-item" data-st-roll-search="about version author email github">
+          <div class="st-roll-item st-roll-search-item" data-st-roll-search="about version author email github" style="margin-bottom: 12px; align-items: flex-start;">
             <div class="st-roll-item-main">
-              <div class="st-roll-item-title">SillyTavern-Roll Event</div>
+              <div class="st-roll-item-title">${ids.displayName}</div>
               <div class="st-roll-item-desc st-roll-about-meta">
-                <span class="st-roll-about-meta-item"><i class="fa-solid fa-tag"></i><span>版本：${ids.badgeText}</span></span>
-                <span class="st-roll-about-meta-item"><i class="fa-solid fa-user"></i><span>作者：${ids.authorText}</span></span>
-                <span class="st-roll-about-meta-item"><i class="fa-solid fa-envelope"></i><span>邮箱：<a href="mailto:${ids.emailText}">${ids.emailText}</a></span></span>
-                <span class="st-roll-about-meta-item"><i class="fa-brands fa-github"></i><span>GitHub：<a href="${ids.githubUrl}" target="_blank" rel="noopener">${ids.githubText}</a></span></span>
+                <span class="st-roll-about-meta-item">
+                  <i class="fa-solid fa-tag"></i>
+                  <span>版本：${ids.badgeText}</span>
+                </span>
+                <span class="st-roll-about-meta-item">
+                  <i class="fa-solid fa-user"></i>
+                  <span>作者：${ids.authorText}</span>
+                </span>
+                <span class="st-roll-about-meta-item">
+                  <i class="fa-solid fa-envelope"></i>
+                  <span>邮箱：<a href="mailto:${ids.emailText}">${ids.emailText}</a></span>
+                </span>
+                <span class="st-roll-about-meta-item">
+                  <i class="fa-brands fa-github"></i>
+                  <span>GitHub：<a href="${ids.githubUrl}" target="_blank" rel="noopener">${ids.githubText}</a></span>
+                </span>
               </div>
+            </div>
+          </div>
+
+          <div class="st-roll-item st-roll-search-item" style="flex-direction: column; align-items: flex-start; margin-bottom: 12px;" data-st-roll-search="changelog updates history">
+            <div class="st-roll-item-title">更新日志 (Changelog)</div>
+            <div class="st-roll-changelog">
+              ${ids.changelogHtml}
             </div>
           </div>
 

@@ -1,12 +1,14 @@
+
 import type {
   ActiveStatusEvent,
-  DicePluginSettingsEvent,
   StatusEditorRowDraftEvent,
   StatusScopeEvent,
   SkillEditorRowDraftEvent,
   SkillPresetEvent,
   SkillPresetStoreEvent,
+  DicePluginSettingsEvent
 } from "../types/eventDomainEvent";
+import changelogData from "../../changelog.json";
 import type { SettingsCardTemplateIdsEvent } from "../templates/settingsCardTemplateTypes";
 
 function escapeHtml(input: string): string {
@@ -53,6 +55,7 @@ export interface BuildSettingsCardTemplateIdsDepsEvent {
   drawerToggleId: string;
   drawerContentId: string;
   drawerIconId: string;
+  SETTINGS_DISPLAY_NAME_Event: string;
   SETTINGS_BADGE_ID_Event: string;
   SETTINGS_BADGE_VERSION_Event: string;
   SETTINGS_AUTHOR_TEXT_Event: string;
@@ -129,17 +132,35 @@ export interface BuildSettingsCardTemplateIdsDepsEvent {
 export function buildSettingsCardTemplateIdsEvent(
   deps: BuildSettingsCardTemplateIdsDepsEvent
 ): SettingsCardTemplateIdsEvent {
+
+  function generateChangelogHtml() {
+    if (!Array.isArray(changelogData) || changelogData.length === 0) return '暂无更新记录';
+    return changelogData.map((log: any) => `
+      <div style="margin-bottom: 12px;">
+        <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+            <span style="font-weight: bold; color: var(--SmartThemeQuoteTextColor, #fff); font-size: 13px;">${log.version}</span>
+            ${log.date ? `<span style="font-size: 11px; opacity: 0.6;">${log.date}</span>` : ''}
+        </div>
+        <ul style="margin: 0; padding-left: 20px; font-size: 12px; opacity: 0.85;">
+          ${log.changes.map((c: string) => `<li style="margin-bottom: 4px; line-height: 1.4;">${c}</li>`).join('')}
+        </ul>
+      </div>
+    `).join('');
+  }
+
   return {
     cardId: deps.SETTINGS_CARD_ID_Event,
     drawerToggleId: deps.drawerToggleId,
     drawerContentId: deps.drawerContentId,
     drawerIconId: deps.drawerIconId,
+    displayName: deps.SETTINGS_DISPLAY_NAME_Event,
     badgeId: deps.SETTINGS_BADGE_ID_Event,
     badgeText: deps.SETTINGS_BADGE_VERSION_Event,
     authorText: deps.SETTINGS_AUTHOR_TEXT_Event,
     emailText: deps.SETTINGS_EMAIL_TEXT_Event,
     githubText: deps.SETTINGS_GITHUB_TEXT_Event,
     githubUrl: deps.SETTINGS_GITHUB_URL_Event,
+    changelogHtml: generateChangelogHtml(),
     searchId: deps.SETTINGS_SEARCH_ID_Event,
     tabMainId: deps.SETTINGS_TAB_MAIN_ID_Event,
     tabSkillId: deps.SETTINGS_TAB_SKILL_ID_Event,
@@ -273,7 +294,14 @@ export function mountSettingsCardShellEvent(
     root.appendChild(statusModal);
   }
 
-  container.prepend(root);
+  let ssContainer = document.getElementById("ss-helper-plugins-container");
+  if (!ssContainer) {
+    ssContainer = document.createElement("div");
+    ssContainer.id = "ss-helper-plugins-container";
+    container.prepend(ssContainer);
+  }
+  ssContainer.appendChild(root);
+
   deps.syncSettingsBadgeVersionEvent();
   deps.onMountedEvent({ drawerToggleId, drawerContentId });
   deps.syncSettingsUiEvent();
@@ -755,9 +783,9 @@ export function bindBasicSettingsInputsEvent(deps: BindBasicSettingsInputsDepsEv
     const raw = Number((event.target as HTMLInputElement).value);
     const value = Number.isFinite(raw)
       ? Math.min(
-          deps.SUMMARY_HISTORY_ROUNDS_MAX_Event,
-          Math.max(deps.SUMMARY_HISTORY_ROUNDS_MIN_Event, Math.floor(raw))
-        )
+        deps.SUMMARY_HISTORY_ROUNDS_MAX_Event,
+        Math.max(deps.SUMMARY_HISTORY_ROUNDS_MIN_Event, Math.floor(raw))
+      )
       : deps.DEFAULT_SUMMARY_HISTORY_ROUNDS_Event;
     deps.updateSettingsEvent({ summaryHistoryRounds: value });
   });
@@ -923,7 +951,7 @@ export function bindSkillPresetActionsEvent(deps: BindSkillPresetActionsDepsEven
       (preset) =>
         preset.id !== activePreset.id &&
         deps.normalizeSkillPresetNameKeyEvent(preset.name) ===
-          deps.normalizeSkillPresetNameKeyEvent(nextName)
+        deps.normalizeSkillPresetNameKeyEvent(nextName)
     );
     if (duplicated) {
       deps.renderSkillValidationErrorsEvent(["预设名称重复，请使用其他名称。"]);
